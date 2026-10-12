@@ -63,10 +63,27 @@ Everything else inbound on WAN hits the default deny.
 
 Default rules: allow LAN to any. Outbound NAT is on Automatic.
 
+### Port forwards (Firewall → NAT → Port Forward)
+
+Temporary admin access to lab VMs, used until the FortiGate route and policy are in place. Each forward has an associated filter rule.
+
+| WAN port | Source | Redirect to | Purpose |
+|---|---|---|---|
+| 2210/tcp | 172.16.20.0/24 | 192.168.50.10:22 | SSH to elk01 |
+| 5601/tcp | 172.16.20.0/24 | 192.168.50.10:5601 | Kibana |
+
+Destination port must never be *any*. That would redirect 443 too and lock you out of the OPNsense GUI. In the Source field, the mask goes in the separate dropdown: type `172.16.20.0` and select `24`, not `172.16.20.0/24`.
+
+## Remote logging
+
+*System → Settings → Logging → Remote*: filter (pf), system and configd are sent via UDP to `192.168.50.10:5514` (Logstash on elk01) in RFC5424 format. Facilities are left empty (all). See [`../elk/`](../elk/README.md).
+
 ## Admin access
 
 - GUI: `https://172.16.10.17` (from the admin network) or `https://192.168.50.1` (from the lab LAN)
 - SSH: `172.16.10.17:22`
+- elk01 SSH: `ssh -p 2210 <user>@172.16.10.17`
+- Kibana: `http://172.16.10.17:5601`
 
 ## Verification commands
 

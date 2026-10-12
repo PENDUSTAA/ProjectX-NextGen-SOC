@@ -1,0 +1,13 @@
+# Appended to the default /etc/kibana/kibana.yml (do not replace the whole file)
+server.port: 5601
+server.host: "192.168.50.10"
+server.name: "elk01"
+elasticsearch.hosts: ["https://192.168.50.10:9200"]
+elasticsearch.username: "kibana_system"
+elasticsearch.password: "<KIBANA_SYSTEM_PASSWORD>"
+elasticsearch.ssl.certificateAuthorities: ["/etc/kibana/certs/http_ca.crt"]
+
+# Generated with: /usr/share/kibana/bin/kibana-encryption-keys generate -q
+xpack.encryptedSavedObjects.encryptionKey: <GENERATED>
+xpack.reporting.encryptionKey: <GENERATED>
+xpack.security.encryptionKey: <GENERATED>
