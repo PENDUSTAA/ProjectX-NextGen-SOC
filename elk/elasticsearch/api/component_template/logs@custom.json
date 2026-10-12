@@ -1,0 +1,16 @@
+{
+  "template": {
+    "settings": {
+      "index": {
+        "lifecycle": {
+          "name": "projectx-logs-90d"
+        },
+        "number_of_replicas": "0"
+      }
+    }
+  },
+  "_meta": {
+    "managed_by": "projectx-infra",
+    "description": "Applies to every logs-*-* data stream: 90-day retention, no replicas (single-node cluster)"
+  }
+}

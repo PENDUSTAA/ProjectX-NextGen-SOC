@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Deploy to elk01: check = show diff only, apply = deploy"
+        type: choice
+        options: [check, apply]
+        default: check
+
+permissions:
+  contents: read
+
+env:
+  LS_IMAGE: docker.elastic.co/logstash/logstash:8.19.23   # keep in step with elk01
+
+jobs:
+  lint:
+    name: Lint (YAML + ES API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: pip install yamllint
+      - run: yamllint -c .yamllint.yml .
+      - name: Elasticsearch API objects (JSON, retention, references)
+        run: bash ci/test-es-api.sh
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.18.4 \
+            detect --source /repo --config /repo/.gitleaks.toml --redact --verbose
+
+  logstash:
+    name: Logstash config + parser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Pull Logstash image
+        run: docker pull "$LS_IMAGE"
+      - name: Config syntax test (logstash -t)
+        run: bash ci/test-logstash-config.sh
+      - name: Parser test with real OPNsense samples
+        run: bash ci/test-logstash-filter.sh
+
+  deploy:
+    name: Deploy to elk01
+    needs: [lint, secrets, logstash]
+    # Manual runs always allowed (default: check only). Auto-deploy on merge to main
+    # only after the repo variable DEPLOY_ENABLED is set to "true".
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'))
+    runs-on: [self-hosted, elk01]
+    environment: elk01
+    concurrency:
+      group: deploy-elk01
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - name: Deploy (root-owned script, validates + rolls back on failure)
+        env:
+          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}
+        run: |
+          if [ "$MODE" = "check" ]; then
+            sudo -n /opt/projectx/deploy-elk.sh "$GITHUB_WORKSPACE" --check
+          else
+            sudo -n /opt/projectx/deploy-elk.sh "$GITHUB_WORKSPACE"
+          fi

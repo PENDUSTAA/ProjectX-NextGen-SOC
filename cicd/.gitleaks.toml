@@ -1,0 +1,12 @@
+title = "projectx-infra"
+
+[extend]
+useDefault = true
+
+# Extra rule: any literal password in a config file (placeholders and ${VARS} are allowed)
+[[rules]]
+id = "config-literal-password"
+description = "Literal password in config"
+regex = '''(?i)password\s*(=>|:|=)\s*["']?([^"'\s<$][^"'\s]{3,})'''
+secretGroup = 2
+path = '''\.(conf|ya?ml|json)$'''

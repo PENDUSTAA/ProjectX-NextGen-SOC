@@ -1,0 +1,27 @@
+{
+  "policy": {
+    "_meta": {
+      "managed_by": "projectx-infra",
+      "description": "Roll over weekly or at 50GB per shard; delete 90 days after rollover"
+    },
+    "phases": {
+      "hot": {
+        "min_age": "0ms",
+        "actions": {
+          "rollover": {
+            "max_age": "7d",
+            "max_primary_shard_size": "50gb"
+          }
+        }
+      },
+      "delete": {
+        "min_age": "90d",
+        "actions": {
+          "delete": {
+            "delete_searchable_snapshot": true
+          }
+        }
+      }
+    }
+  }
+}

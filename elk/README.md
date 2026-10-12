@@ -27,7 +27,14 @@ Admin network 172.16.20.0/24 ──► OPNsense WAN 172.16.10.17
 | `/etc/elasticsearch/elasticsearch.yml` | [`elasticsearch/elasticsearch.yml`](elasticsearch/elasticsearch.yml) | Full file |
 | `/etc/elasticsearch/jvm.options.d/heap.options` | [`elasticsearch/heap.options`](elasticsearch/heap.options) | 6 GB heap |
 | `/etc/kibana/kibana.yml` | [`kibana/kibana.yml`](kibana/kibana.yml) | Lines **appended** to the default file |
-| `/etc/logstash/conf.d/opnsense.conf` | [`logstash/conf.d/opnsense.conf`](logstash/conf.d/opnsense.conf) | OPNsense pipeline |
+| `/etc/logstash/conf.d/10-input-opnsense.conf` | [`logstash/conf.d/10-input-opnsense.conf`](logstash/conf.d/10-input-opnsense.conf) | UDP 5514 input, tags events `opnsense` |
+| `/etc/logstash/conf.d/50-filter-opnsense.conf` | [`logstash/conf.d/50-filter-opnsense.conf`](logstash/conf.d/50-filter-opnsense.conf) | filterlog → ECS parser (tested in CI) |
+| `/etc/logstash/conf.d/90-output-elasticsearch.conf` | [`logstash/conf.d/90-output-elasticsearch.conf`](logstash/conf.d/90-output-elasticsearch.conf) | Data stream output; password from keystore |
+| *(CI only)* | [`logstash/tests/opnsense.log`](logstash/tests/opnsense.log) | Real sample lines the parser test runs |
+| ILM policy `projectx-logs-90d` | [`elasticsearch/api/ilm/`](elasticsearch/api/ilm/) | Deployed via the Elasticsearch API |
+| Component template `logs@custom` | [`elasticsearch/api/component_template/`](elasticsearch/api/component_template/) | Deployed via the Elasticsearch API |
+
+The pipeline is split into input / filter / output so each new log source adds its own files, and CI can test a filter on its own. Every filter is wrapped in `if "<tag>" in [tags]`, so sources never touch each other's events.
 
 ## Memory budget (16 GB)
 
@@ -122,7 +129,8 @@ sudo /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash cre
 sudo /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash add LOGSTASH_WRITER_PASSWORD
 sudo chown root:logstash /etc/logstash/logstash.keystore && sudo chmod 640 /etc/logstash/logstash.keystore
 
-# copy in logstash/conf.d/opnsense.conf, then:
+# "Continue without password protection?" -> answer y (N cancels and no keystore is created)
+# copy in logstash/conf.d/*.conf, then:
 sudo -u logstash /usr/share/logstash/bin/logstash --path.settings /etc/logstash -t
 sudo systemctl enable --now logstash
 sudo ss -ulnp | grep 5514
@@ -164,7 +172,25 @@ In Kibana, create a data view named `OPNsense` with the pattern `logs-opnsense-*
 | `destination.ip`, `destination.port` | |
 | `opnsense.dir`, `opnsense.tcp_flags` | in/out, S/SA/R… |
 
-Data stream: `logs-opnsense-default`. It uses Elastic's built-in `logs` template and lifecycle policy.
+Data stream: `logs-opnsense-default`.
+
+## Retention and index settings
+
+| Object | Effect |
+|---|---|
+| ILM `projectx-logs-90d` | Roll over weekly or at 50 GB per shard; **delete 90 days after rollover** (data kept 90–97 days) |
+| Component template `logs@custom` | Applies that policy to **every** `logs-*-*` data stream, and sets `number_of_replicas: 0` |
+
+`logs@custom` is the hook Elastic's built-in `logs` template leaves for overrides, so no built-in template is copied or modified. Replicas are 0 because a single node can never place a replica copy, which otherwise keeps cluster health **yellow**.
+
+Templates only affect new backing indices. Indices that already exist were updated once:
+
+```bash
+curl --cacert $CA -u elastic -X PUT "$ES/logs-*/_settings" -H 'Content-Type: application/json' \
+  -d '{"index":{"lifecycle":{"name":"projectx-logs-90d"},"number_of_replicas":0}}'
+```
+
+Result: cluster health **green**, and `logs-opnsense-default` is managed by `projectx-logs-90d`.
 
 ## Build notes and gotchas
 
@@ -175,10 +201,13 @@ Data stream: `logs-opnsense-default`. It uses Elastic's built-in `logs` template
 5. **Stray `column25/27/29` fields.** TCP filterlog lines have 29 CSV fields. Name all 29 in the `csv` filter, or Logstash auto-names the extras.
 6. **Logstash cannot bind ports below 1024** as the `logstash` user. OPNsense sends to 5514 directly, so no rsyslog relay is needed.
 7. **Only logged rules reach the SIEM.** Enable *Log packets* on the OPNsense rules you care about.
+8. **Duplicate `syslog_msg` on every event.** Found by the CI parser test on its first real run: the raw CSV was stored twice per event. The filter now removes it.
+9. **Keystore never created.** `logstash-keystore create` asks *"Continue without password protection?"*; answering N cancels silently. Answer **y**.
+10. **Keystore keys are stored lowercase.** `add LOGSTASH_WRITER_PASSWORD` is stored as `logstash_writer_password`. Logstash resolves `${...}` case-insensitively, so the pipeline works, but any script checking for the key must compare case-insensitively.
 
 ## Next
 
+- [x] Custom ILM retention (90 days) and single-node replica fix
+- [x] Configs in a private infra repo with CI validation and automated deploy (see [`../cicd/`](../cicd/README.md))
 - [ ] Detection rules in Kibana Security on `logs-opnsense-*`
-- [ ] Custom ILM retention (currently the built-in `logs` policy)
 - [ ] IPv6 filterlog layout
-- [ ] Move configs to the private infra repo + CI validation (`logstash -t`)
