@@ -1,0 +1,14 @@
+# -> /etc/elastalert/config.yaml on elk01. Credentials come from /etc/elastalert/elastalert.env (ES_USERNAME/ES_PASSWORD), not this file.
+rules_folder: /etc/elastalert/rules
+run_every:
+  minutes: 1
+buffer_time:
+  minutes: 15
+es_host: 192.168.50.10
+es_port: 9200
+use_ssl: true
+verify_certs: true
+ca_certs: /etc/elastalert/http_ca.crt
+writeback_index: elastalert
+alert_time_limit:
+  days: 2

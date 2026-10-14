@@ -23,6 +23,7 @@ flowchart TB
                 LS["Logstash<br/>udp/5514"]
                 ES["Elasticsearch 8.19<br/>:9200 TLS"]
                 KB["Kibana<br/>:5601"]
+                EA["ElastAlert2<br/>detection rules"]
                 RUN["GitHub Actions<br/>self-hosted runner"]
             end
             subgraph HIVE01["hive01 · 192.168.50.15"]
@@ -38,7 +39,7 @@ flowchart TB
     WAN --- OPNL
     OPNL -- "firewall logs (syslog RFC5424)" --> LS --> ES --> KB
     ADMIN -. "NAT 2210 SSH · 5601 Kibana<br/>8443 TheHive · 3443 Shuffle" .-> WAN
-    ELK01 -- "webhook (tested)<br/>ElastAlert2 next" --> SH
+    ES --> EA -- "webhook: detections" --> SH
     SH -- "create alert + observables (API)" --> TH
     RUN -- "outbound HTTPS only" --> GH
     RUN -- "deploy-elk.sh" --> LS
@@ -55,8 +56,8 @@ flowchart TB
 | CI/CD: tests, deploy with rollback, PR workflow | [`cicd/`](cicd/README.md) | ✅ Live on elk01 |
 | TheHive 5.8: case management (Docker Compose, Community license) | [`hive01/`](hive01/README.md) | ✅ Running, organisation and users set up |
 | Shuffle: SOAR, co-hosted with TheHive | [`hive01/`](hive01/README.md) | ✅ Running; creates TheHive alerts with observables |
-| ELK → Shuffle → TheHive | [`hive01/`](hive01/README.md#elk--shuffle-webhook) | 🟡 Webhook path tested end to end; ElastAlert2 (automatic alerting) next |
-| Detection rules (port scan, brute force, lateral scan, block spikes) | | ⏳ Planned |
+| Detections: ElastAlert2 → Shuffle → TheHive | [`elastalert/`](elastalert/README.md) | ✅ Automatic; first rule (port scan) live |
+| More detection rules (brute force, lateral scan, block spikes); rules deployed by CI | | ⏳ Planned |
 | Cortex, MISP, OpenCTI | | ⏳ Planned |
 
 ## How changes are made
@@ -76,6 +77,7 @@ elk/            SIEM build: configs, Logstash pipeline, retention objects, gotch
   elasticsearch/   elasticsearch.yml, heap, API objects (ILM, component template)
   kibana/          kibana.yml additions
   logstash/        conf.d/ split pipeline, tests/ sample logs
+elastalert/     Detection rules (ElastAlert2): config, rules, service, build notes
 hive01/         Case management + SOAR: TheHive and Shuffle stacks, ports, users, gotchas
 cicd/           Pipeline reference: workflow, test + deploy scripts, integration guide
 ```

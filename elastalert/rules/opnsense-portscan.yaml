@@ -1,0 +1,31 @@
+# Port scan: one source IP, >20 distinct destination ports in 5 min. Webhook URL is a placeholder;
+# the real URL is inserted on elk01 only (see elastalert/README.md).
+name: opnsense-portscan
+description: "One source IP hits more than 20 distinct destination ports through OPNsense within 5 minutes (MITRE T1046)"
+index: logs-opnsense-default
+type: cardinality
+query_key: source.ip
+cardinality_field: destination.port
+max_cardinality: 20
+timeframe:
+  minutes: 5
+realert:
+  minutes: 30
+filter:
+- term:
+    event.dataset: opnsense.firewall
+- exists:
+    field: destination.port
+alert:
+- post2
+http_post2_url: "__SHUFFLE_WEBHOOK_URL__"
+http_post2_ignore_ssl_errors: true
+jinja_root_name: _data
+http_post2_payload:
+  title: "Port scan detected from {{ source.ip }}"
+  description: >-
+    {{ source.ip }} hit more than 20 distinct destination ports on {{ destination.ip }}
+    (interface {{ observer.ingress.interface.name }}) within 5 minutes. Last firewall action: {{ event.action }}.
+  type: "portscan"
+  ref: "portscan-{{ source.ip }}-{{ _data['@timestamp'] }}"
+  src_ip: "{{ source.ip }}"

@@ -1,0 +1,20 @@
+[Unit]
+Description=ElastAlert2 (PROJECT X detections)
+After=network-online.target elasticsearch.service
+Wants=network-online.target
+
+[Service]
+User=elastalert
+Group=elastalert
+EnvironmentFile=/etc/elastalert/elastalert.env
+WorkingDirectory=/tmp
+ExecStart=/opt/elastalert2/bin/elastalert --config /etc/elastalert/config.yaml --verbose
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
