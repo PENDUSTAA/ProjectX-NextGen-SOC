@@ -90,12 +90,48 @@ Then open Shuffle immediately and create the admin account. The first visitor to
 
 Service accounts and read-only users don't count toward the 2 licensed seats. Other team members are read-only until a paid tier.
 
-## Integrations (planned / in progress)
+## Integrations
 
 | From → To | How |
 |---|---|
 | Shuffle → TheHive | ✅ **Working.** TheHive app in Shuffle, URL `https://192.168.50.15`, API key of `svc-shuffle`. Test workflow `Test - TheHive alert` creates alerts with observables |
-| ELK → Shuffle → TheHive | Kibana detection alerts → Shuffle webhook → TheHive alert/case |
+| elk01 → Shuffle → TheHive | ✅ **Working (manual curl test, 2026-10-14).** Webhook trigger `elk-alerts` → TheHive 1 *Create alert* → 201. Next: ElastAlert2 on elk01 posts to the webhook automatically |
+| TheHive → Cortex (`.13`), MISP (`.12`) | Later, one of each allowed by Community license |
+
+Kibana's own webhook connector needs a paid Elastic license, so ElastAlert2 (open source) does the ELK → Shuffle step.
+
+## ELK → Shuffle webhook
+
+Workflow: **Webhook `elk-alerts` → TheHive 1 (Create alert, Advanced)**. Click the webhook node → **Start** (button then shows *Stop*) → copy the URI → **Save**.
+
+- The URI the UI shows uses the address you browse from (`172.16.10.17`, via the port forward). From inside the LAN use **`https://192.168.50.15:3443/api/v1/hooks/webhook_<id>`**.
+- The webhook ID works like a password: anyone who can reach 3443 can trigger the workflow. Keep it out of Git (ElastAlert2 will read it from a root-only file on elk01).
+
+TheHive 1 body; `$exec` is the JSON posted to the webhook:
+
+```json
+{"title":"$exec.title","description":"$exec.description","type":"$exec.type","source":"elk","sourceRef":"$exec.ref","severity":2,"tlp":2,"pap":2,"flag":false,"tags":["elk","$exec.type"],"observables":[{"dataType":"ip","data":"$exec.src_ip","message":"Source IP"}]}
+```
+
+Payload contract (what the sender must post):
+
+| Field | Example | Notes |
+|---|---|---|
+| `title` | `Port scan detected from 172.16.20.53` | |
+| `description` | free text | |
+| `type` | `portscan` | Also added as a tag |
+| `ref` | `wh-1760414544` | Must be unique per alert (`type:source:sourceRef`); use the detection's ID so repeats de-duplicate |
+| `src_ip` | `172.16.20.53` | Becomes an `ip` observable |
+
+Test from elk01:
+
+```bash
+URL='https://192.168.50.15:3443/api/v1/hooks/webhook_<id>'
+curl -sk -X POST "$URL" -H 'Content-Type: application/json' -d "{\"title\": \"Port scan detected from 172.16.20.53\", \"description\": \"Webhook test from elk01\", \"type\": \"portscan\", \"ref\": \"wh-$(date +%s)\", \"src_ip\": \"172.16.20.53\"}"
+# expect {"success": true, "execution_id": "..."}; the run shows TheHive 1 status 201
+```
+
+`{"success": false, "reason": "Hook ID not valid"}` = wrong ID or webhook not started (but it proves the network path works).
 | TheHive → Cortex (`.13`), MISP (`.12`) | Later, one of each allowed by Community license |
 
 ## Build notes and gotchas

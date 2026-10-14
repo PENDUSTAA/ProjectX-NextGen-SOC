@@ -38,7 +38,7 @@ flowchart TB
     WAN --- OPNL
     OPNL -- "firewall logs (syslog RFC5424)" --> LS --> ES --> KB
     ADMIN -. "NAT 2210 SSH · 5601 Kibana<br/>8443 TheHive · 3443 Shuffle" .-> WAN
-    KB -. "alerts (planned)" .-> SH
+    ELK01 -- "webhook (tested)<br/>ElastAlert2 next" --> SH
     SH -- "create alert + observables (API)" --> TH
     RUN -- "outbound HTTPS only" --> GH
     RUN -- "deploy-elk.sh" --> LS
@@ -55,6 +55,7 @@ flowchart TB
 | CI/CD: tests, deploy with rollback, PR workflow | [`cicd/`](cicd/README.md) | ✅ Live on elk01 |
 | TheHive 5.8: case management (Docker Compose, Community license) | [`hive01/`](hive01/README.md) | ✅ Running, organisation and users set up |
 | Shuffle: SOAR, co-hosted with TheHive | [`hive01/`](hive01/README.md) | ✅ Running; creates TheHive alerts with observables |
+| ELK → Shuffle → TheHive | [`hive01/`](hive01/README.md#elk--shuffle-webhook) | 🟡 Webhook path tested end to end; ElastAlert2 (automatic alerting) next |
 | Detection rules (port scan, brute force, lateral scan, block spikes) | | ⏳ Planned |
 | Cortex, MISP, OpenCTI | | ⏳ Planned |
 
@@ -90,4 +91,5 @@ cicd/           Pipeline reference: workflow, test + deploy scripts, integration
 | Private infra repo, public docs repo | Real IPs and pipeline stay private; this repo shows the architecture safely |
 | TheHive and Shuffle on one VM, separate Compose stacks | Matches the architecture plan (host .15); each product keeps its own datastore (TheHive's Elasticsearch is not the SIEM's) and can be upgraded independently |
 | Integration accounts as TheHive *Service* users | API-only, least privilege (`analyst`), and they don't consume licensed seats |
+| ElastAlert2 instead of Kibana connectors | Kibana's webhook connector needs a paid Elastic license; ElastAlert2 is open source and its rules are YAML that fits the CI pipeline |
 | Self-hosted runner, root-owned deploy script | Deploys from inside the lab with no inbound access; the repo cannot change what runs as root |
