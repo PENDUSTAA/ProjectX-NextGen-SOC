@@ -1,0 +1,34 @@
+# SSH brute force: same source opens 10+ allowed SSH connections within 2 minutes.
+# Counts only "pass" (connections that actually reached SSH); pf logs each new connection once.
+name: opnsense-ssh-bruteforce
+description: "One source IP opens 10 or more allowed SSH connections within 2 minutes (MITRE T1110)"
+index: logs-opnsense-default
+type: frequency
+query_key: source.ip
+num_events: 10
+timeframe:
+  minutes: 2
+realert:
+  minutes: 30
+filter:
+- term:
+    event.dataset: opnsense.firewall
+- term:
+    event.action: pass
+- term:
+    network.transport: tcp
+- term:
+    destination.port: 22
+alert:
+- post2
+http_post2_url: "__SHUFFLE_WEBHOOK_URL__"
+http_post2_ignore_ssl_errors: true
+jinja_root_name: _data
+http_post2_payload:
+  title: "Possible SSH brute force from {{ source.ip }}"
+  description: >-
+    {{ source.ip }} opened 10 or more SSH connections to {{ destination.ip }}
+    (interface {{ observer.ingress.interface.name }}) within 2 minutes.
+  type: "bruteforce"
+  ref: "bruteforce-{{ source.ip }}-{{ _data['@timestamp'] }}"
+  src_ip: "{{ source.ip }}"

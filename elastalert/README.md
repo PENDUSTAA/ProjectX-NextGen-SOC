@@ -45,6 +45,7 @@ Then *Actions → CI → Run workflow* with mode `check`: the ElastAlert2 sectio
 | Rule | Logic | TheHive alert |
 |---|---|---|
 | `opnsense-portscan` | Same `source.ip` hits **> 20 distinct `destination.port`** within 5 min (pass or block); re-alert per IP at most every 30 min | `Port scan detected from <ip>`, type `portscan`, ip observable (MITRE T1046) |
+| `opnsense-ssh-bruteforce` | Same `source.ip` opens **≥ 10 allowed (pass) TCP connections to port 22** within 2 min; blocked attempts ignored (they never reach SSH); re-alert every 30 min. Tested 2026-10-14: 12 `ssh` attempts from the workstation → alert ~1 min later. First rule added by PR (#2) | `Possible SSH brute force from <ip>`, type `bruteforce` (MITRE T1110) |
 
 Every rule posts the payload contract from `hive01/README.md`: `title`, `description`, `type`, `ref` (unique), `src_ip`.
 
@@ -107,4 +108,6 @@ Live test for the port-scan rule, from the admin workstation: `nmap -Pn -sT --to
 5. **`elastalert-test-rule --schema-only` only says "not valid under any of the given schemas"** for most mistakes. The CI script re-checks with ElastAlert2's schema and rule/alerter lists to report the actual field (`unknown rule type 'cardinalty'`, `max_cardinality: 'x' is not of type 'integer'`).
 6. **The deploy diff would print the webhook URL** into GitHub logs; all ElastAlert2 diffs and journal output are piped through a redaction filter (`hooks/webhook_<redacted>`).
 7. **Shuffle uses a self-signed certificate**, so the rule sets `http_post2_ignore_ssl_errors: true` (same as `curl -k`). Hardening item: trust Shuffle's cert instead.
+9. **The webhook URL is stored in every alert record** (`elastalert` index, `alert_info.http_post2_webhook_url`). Anyone who can read that index in Kibana can see it. Today only `elastic` can; hardening item: restrict `elastalert*` to admins, rotate the webhook if it leaks (new ID in Shuffle → update `/etc/projectx/shuffle-webhook.env` → re-run deploy).
+10. **SSH via the 2210 port forward appears as port 22 on 192.168.50.10** (pf logs after NAT), and only if logging is on for that forward's filter rule.
 8. **Count pass and block.** The admin workstation is allowed by the WAN rule for some ports, so its scan is partly logged as `pass`; filtering on `block` only would under-count.
