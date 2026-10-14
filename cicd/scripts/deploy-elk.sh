@@ -7,7 +7,7 @@
 # Usage: deploy-elk.sh <checkout-dir> [--check]
 #   --check   show what would change, apply nothing
 #
-# Order: Elasticsearch first (Logstash depends on it), then Logstash.
+# Order: Elasticsearch first (Logstash depends on it), then ES API objects, Logstash, ElastAlert2.
 # Each component: diff -> validate -> backup -> apply -> restart -> health check -> rollback on failure.
 set -euo pipefail
 
@@ -31,7 +31,8 @@ flock -n 9 || die "another deploy is running"
 
 CHANGED=0
 STAGE="$(mktemp -d /tmp/ls-stage.XXXXXX)"; SDATA="$(mktemp -d /tmp/ls-data.XXXXXX)"
-trap 'rm -rf "$STAGE" "$SDATA"' EXIT
+EA_ST=""
+trap 'rm -rf "$STAGE" "$SDATA" ${EA_ST:+"$EA_ST"}' EXIT
 
 # ---------------------------------------------------------------- Elasticsearch
 deploy_elasticsearch() {
@@ -201,9 +202,96 @@ deploy_logstash() {
   log "Logstash: healthy (listening on udp/5514)"; CHANGED=1
 }
 
+# ---------------------------------------------------------------- ElastAlert2
+# Rules in the repo carry the placeholder __SHUFFLE_WEBHOOK_URL__; the real URL lives in a
+# root-only file on this host (never in Git) and is inserted here:
+#   /etc/projectx/shuffle-webhook.env  ->  SHUFFLE_WEBHOOK_URL=https://<hive01>:3443/api/v1/hooks/webhook_<id>
+# Rules deleted from the repo are removed from the host.
+EA_SRC="$CHECKOUT/elastalert"
+EA_DST="/etc/elastalert"
+EA_UNIT="/etc/systemd/system/elastalert.service"
+EA_HOOK_ENV="/etc/projectx/shuffle-webhook.env"
+EA_PLACEHOLDER="__SHUFFLE_WEBHOOK_URL__"
+
+redact() { sed -E 's#hooks/webhook_[A-Za-z0-9-]+#hooks/webhook_<redacted>#g'; }
+
+deploy_elastalert() {
+  [ -d "$EA_SRC/rules" ] || { log "ElastAlert2: nothing in repo"; return 0; }
+  [ -x /opt/elastalert2/bin/elastalert ] || die "ElastAlert2 is not installed in /opt/elastalert2 (see elastalert/README.md)"
+  [ -r "$EA_HOOK_ENV" ] || die "missing $EA_HOOK_ENV (SHUFFLE_WEBHOOK_URL=...); see elastalert/README.md"
+  local SHUFFLE_WEBHOOK_URL=""
+  # shellcheck disable=SC1090
+  . "$EA_HOOK_ENV"
+  [[ "$SHUFFLE_WEBHOOK_URL" =~ ^https?://[^\ \|]+/api/v1/hooks/webhook_[A-Za-z0-9-]+$ ]] \
+    || die "SHUFFLE_WEBHOOK_URL in $EA_HOOK_ENV is missing or malformed"
+
+  # Stage: config + rules with the real URL, readable by the elastalert user for validation
+  EA_ST="$(mktemp -d /tmp/ea-stage.XXXXXX)"; local st="$EA_ST"
+  mkdir "$st/rules"
+  cp "$EA_SRC/config.yaml" "$st/config.yaml"
+  local f
+  for f in "$EA_SRC"/rules/*.yaml; do
+    [ -e "$f" ] || continue
+    sed "s|$EA_PLACEHOLDER|$SHUFFLE_WEBHOOK_URL|g" "$f" > "$st/rules/$(basename "$f")"
+  done
+  grep -l "$EA_PLACEHOLDER" "$st"/rules/*.yaml 2>/dev/null && die "placeholder left in a staged rule"
+
+  local cfg_same=1 rules_same=1 unit_same=1
+  cmp -s "$st/config.yaml" "$EA_DST/config.yaml" || cfg_same=0
+  diff -rq "$st/rules" "$EA_DST/rules" >/dev/null 2>&1 || rules_same=0
+  cmp -s "$EA_SRC/elastalert.service" "$EA_UNIT" || unit_same=0
+  if [ $cfg_same -eq 1 ] && [ $rules_same -eq 1 ] && [ $unit_same -eq 1 ]; then
+    rm -rf "$st"; log "ElastAlert2: no changes"; return 0
+  fi
+  log "ElastAlert2: changes detected (webhook URL redacted in output)"
+  diff -u "$EA_DST/config.yaml" "$st/config.yaml" | redact || true
+  diff -ruN "$EA_DST/rules" "$st/rules" | redact || true
+  diff -u "$EA_UNIT" "$EA_SRC/elastalert.service" || true
+  if [ "$MODE" = "--check" ]; then rm -rf "$st"; return 0; fi
+
+  # Validate every staged rule with ElastAlert2's own schema check, as the elastalert user
+  chown -R root:elastalert "$st"; chmod 750 "$st" "$st/rules"; chmod 640 "$st/config.yaml" "$st"/rules/*.yaml
+  sed -i "s|^rules_folder:.*|rules_folder: $st/rules|" "$st/config.yaml"
+  for f in "$st"/rules/*.yaml; do
+    sudo -u elastalert /opt/elastalert2/bin/elastalert-test-rule --config "$st/config.yaml" --schema-only "$f" >/dev/null 2>&1 \
+      || { rm -rf "$st"; die "ElastAlert2 rule $(basename "$f") failed the schema check; nothing was changed"; }
+  done
+  cp "$EA_SRC/config.yaml" "$st/config.yaml"   # restore real rules_folder
+
+  local bk="$BACKUP_ROOT/$TS/elastalert"; mkdir -p "$bk/rules"
+  cp -a "$EA_DST/config.yaml" "$bk/"; cp -a "$EA_DST"/rules/. "$bk/rules/"; cp -a "$EA_UNIT" "$bk/"
+  chmod -R go-rwx "$bk"   # backups contain the webhook URL
+  log "ElastAlert2: backup in $bk"
+
+  install -o root -g elastalert -m 640 "$st/config.yaml" "$EA_DST/config.yaml"
+  rm -f "$EA_DST"/rules/*.yaml
+  for f in "$st"/rules/*.yaml; do install -o root -g elastalert -m 640 "$f" "$EA_DST/rules/"; done
+  install -o root -g root -m 644 "$EA_SRC/elastalert.service" "$EA_UNIT"
+  rm -rf "$st"
+  systemctl daemon-reload
+  local since; since="$(date '+%Y-%m-%d %H:%M:%S')"
+  systemctl restart elastalert || true
+
+  # Healthy = still active 45 s after restart and no rule-load errors in the journal
+  sleep 45
+  local errs; errs="$(journalctl -u elastalert --since "$since" --no-pager 2>/dev/null | grep -E 'Traceback|ERROR|Error loading|is not valid' | redact || true)"
+  if ! systemctl is-active -q elastalert || [ -n "$errs" ]; then
+    echo "::error::ElastAlert2 not healthy after deploy; rolling back"
+    journalctl -u elastalert --since "$since" --no-pager -n 40 | redact || true
+    install -o root -g elastalert -m 640 "$bk/config.yaml" "$EA_DST/config.yaml"
+    rm -f "$EA_DST"/rules/*.yaml
+    cp -a "$bk"/rules/. "$EA_DST/rules/"
+    install -o root -g root -m 644 "$bk/elastalert.service" "$EA_UNIT"
+    systemctl daemon-reload; systemctl restart elastalert || true
+    die "ElastAlert2 deploy failed and was rolled back"
+  fi
+  log "ElastAlert2: healthy ($(ls "$EA_DST"/rules/*.yaml | wc -l) rule(s) loaded)"; CHANGED=1
+}
+
 log "Deploying from $CHECKOUT (mode: $MODE)"
 deploy_elasticsearch
 deploy_es_api
 deploy_logstash
+deploy_elastalert
 [ "$MODE" = "--check" ] && { log "Check only: nothing applied"; exit 0; }
 [ "$CHANGED" -eq 1 ] && log "Deploy complete" || log "Nothing to deploy"

@@ -11,6 +11,7 @@ There are two levels. Pick the one that fits.
 
 | You are adding… | Level | Deploy script change? |
 |---|---|---|
+| A new **detection rule** (ElastAlert2 → Shuffle → TheHive) | **0** | No |
 | A new **log source** into the existing Logstash (FortiGate, Windows, Palo Alto, Sophos…) | **1** | No |
 | A new **service** (TheHive, MISP, Shuffle, Wazuh…) or new settings for ES/Kibana | **2** | Yes |
 
@@ -27,6 +28,35 @@ There are two levels. Pick the one that fits.
 **GitHub Desktop:** Current branch → **New branch** → edit files locally → **Commit** → **Publish branch** → **Create Pull Request** → same as steps 3–4.
 
 Never commit straight to `main` for real changes. The PR is where CI checks your work before it can reach elk01.
+
+---
+
+## Level 0: New detection rule (ElastAlert2)
+
+One YAML file in `elastalert/rules/`. CI checks it; the deploy copies it to elk01, inserts the real Shuffle webhook URL, restarts ElastAlert2 and rolls back if it doesn't come up healthy. Deleting the file removes the rule from elk01.
+
+1. Copy `elastalert/rules/opnsense-portscan.yaml` to `elastalert/rules/<rule-name>.yaml`.
+2. Set `name:` to exactly `<rule-name>` (CI checks this).
+3. Change the detection part: `type`, `filter`, thresholds. Rule types: [ElastAlert2 docs](https://elastalert2.readthedocs.io/en/latest/ruletypes.html). Field names are the ECS names you see in Kibana Discover (`source.ip`, `destination.port`, `event.action`…).
+4. Keep `alert: [post2]` and `http_post2_url: "__SHUFFLE_WEBHOOK_URL__"` exactly as they are. **Never paste the real webhook URL**; CI fails if you do.
+5. Fill `http_post2_payload` with the five fields Shuffle expects: `title`, `description`, `type` (short, e.g. `bruteforce`), `ref` (unique per alert, include `{{ source.ip }}` and `{{ _data['@timestamp'] }}`), `src_ip`.
+6. If your rule uses fields that aren't in `elastalert/tests/sample-event.json`, add them there, or CI reports the payload renders empty.
+7. PR → CI → merge → deploy (daily workflow above).
+8. Test it for real and check TheHive Alerts.
+
+Before the PR, you can dry-run a rule against real data on elk01 (sends nothing):
+```bash
+sudo -u elastalert bash -c 'cd /tmp && set -a && . /etc/elastalert/elastalert.env && /opt/elastalert2/bin/elastalert-test-rule --config /etc/elastalert/config.yaml /path/to/<rule-name>.yaml'
+```
+(The webhook placeholder is fine for a dry run.)
+
+| CI message | Fix |
+|---|---|
+| `unknown rule type` | Typo in `type:` (the message lists valid types) |
+| `<option>: … is not of type …` | Wrong value type, e.g. a number in quotes |
+| `rule does not match the ElastAlert2 schema` | Misspelled option name, e.g. `minutez`; compare with the docs |
+| `must be the placeholder` / `contains a real Shuffle webhook URL` | Put `__SHUFFLE_WEBHOOK_URL__` back |
+| `payload fields render empty` | Field name in `{{ … }}` doesn't exist in the sample event (or in your data) |
 
 ---
 

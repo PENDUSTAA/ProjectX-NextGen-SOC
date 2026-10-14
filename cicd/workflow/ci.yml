@@ -17,6 +17,7 @@ permissions:
 
 env:
   LS_IMAGE: docker.elastic.co/logstash/logstash:8.19.23   # keep in step with elk01
+  EA_VERSION: "2.31.0"                                     # ElastAlert2, keep in step with elk01
 
 jobs:
   lint:
@@ -53,9 +54,22 @@ jobs:
       - name: Parser test with real OPNsense samples
         run: bash ci/test-logstash-filter.sh
 
+  elastalert:
+    name: ElastAlert2 rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ElastAlert2 (same version as elk01)
+        run: pip install "elastalert2==$EA_VERSION"
+      - name: Schema, placeholder URL, payload contract, render test
+        run: python ci/test-elastalert-rules.py
+
   deploy:
     name: Deploy to elk01
-    needs: [lint, secrets, logstash]
+    needs: [lint, secrets, logstash, elastalert]
     # Manual runs always allowed (default: check only). Auto-deploy on merge to main
     # only after the repo variable DEPLOY_ENABLED is set to "true".
     if: >-

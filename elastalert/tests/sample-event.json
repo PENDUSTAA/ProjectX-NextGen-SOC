@@ -1,0 +1,12 @@
+{
+  "@timestamp": "2026-10-14T07:29:49.000Z",
+  "event": {"action": "block", "dataset": "opnsense.firewall", "reason": "match"},
+  "observer": {"vendor": "OPNsense", "ingress": {"interface": {"name": "em0"}}},
+  "rule": {"id": "6", "uuid": "02f4bab031b57d1e30553ce08e0ec131"},
+  "network": {"transport": "tcp", "bytes": 52},
+  "source": {"ip": "172.16.20.53", "port": 42631},
+  "destination": {"ip": "172.16.10.17", "port": 3389},
+  "opnsense": {"dir": "in", "tcp_flags": "S"},
+  "host": {"hostname": "OPNsense.internal"},
+  "process": {"name": "filterlog"}
+}

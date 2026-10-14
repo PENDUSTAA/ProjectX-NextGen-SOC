@@ -41,14 +41,15 @@ flowchart LR
 | Secret scan | gitleaks default rules + a custom rule for literal `password =>` in configs | Blocks committing credentials |
 | Logstash config test | `logstash -t` on the full pipeline in a container | Pipeline syntax errors |
 | Parser test | Feeds **real OPNsense log lines** through the filter and asserts ECS fields (actions, IPs, ports as numbers, no stray fields) | Found a duplicate `syslog_msg` field on every event on its first run |
+| ElastAlert2 rules | Same ElastAlert2 version as production: schema check with readable errors, rule name = file name, alerts only to the **webhook placeholder** (fails if a real Shuffle URL is committed), payload carries the fields the Shuffle → TheHive workflow needs and renders to valid JSON against a sample event | Readable errors for typos (`unknown rule type 'cardinalty'`) instead of ElastAlert2's generic schema message |
 
-Scripts: [`scripts/test-logstash-filter.sh`](scripts/test-logstash-filter.sh), [`scripts/test-logstash-config.sh`](scripts/test-logstash-config.sh), [`scripts/test-es-api.sh`](scripts/test-es-api.sh). Workflow: [`workflow/ci.yml`](workflow/ci.yml).
+Scripts: [`scripts/test-elastalert-rules.py`](scripts/test-elastalert-rules.py), [`scripts/test-logstash-filter.sh`](scripts/test-logstash-filter.sh), [`scripts/test-logstash-config.sh`](scripts/test-logstash-config.sh), [`scripts/test-es-api.sh`](scripts/test-es-api.sh). Workflow: [`workflow/ci.yml`](workflow/ci.yml).
 
 ## Deploy (merge to `main`)
 
 A GitHub Actions **self-hosted runner** on elk01 picks up the deploy job. It only makes outbound HTTPS connections to GitHub, so no inbound firewall rule into the lab is needed.
 
-[`scripts/deploy-elk.sh`](scripts/deploy-elk.sh) runs each component in order (Elasticsearch → Elasticsearch API objects → Logstash) through the same steps:
+[`scripts/deploy-elk.sh`](scripts/deploy-elk.sh) runs each component in order (Elasticsearch → Elasticsearch API objects → Logstash → ElastAlert2 rules) through the same steps:
 
 | Step | Detail |
 |---|---|
@@ -60,6 +61,8 @@ A GitHub Actions **self-hosted runner** on elk01 picks up the deploy job. It onl
 | 6. Health check | Logstash listening on its port (still up 20 s later); Elasticsearch answering; API objects read back and compared |
 | 7. Rollback | On any failed health check, restore the backup and restart |
 
+ElastAlert2 specifics: the real Shuffle webhook URL is inserted from a root-only file on the host at deploy time; every diff and log line is passed through a redaction filter so the URL never reaches CI logs; rules deleted from the repo are removed from the host; healthy = service still active 45 s after restart with no rule-load errors.
+
 A `check` mode shows the exact diff without applying anything. It is used as a dry run before every first deploy of a new component.
 
 ## Security design
@@ -69,7 +72,7 @@ A `check` mode shows the exact diff without applying anything. It is used as a d
 | Least privilege on the host | Runner runs as `gh-runner` (no password, home mode 750); sudo allows **one** command: the deploy script |
 | Repo cannot change what root runs | The deploy script is installed root-owned at `/opt/projectx/` by an admin after reviewing its diff, and is not executed from the checkout |
 | Least privilege in Elasticsearch | `logstash_writer` can only write `logs-opnsense-*`; `projectx_deployer` can only manage ILM policies and templates |
-| No secrets in Git | Passwords live in the Logstash keystore and a root-only (600) env file on the host; gitleaks enforces this in CI |
+| No secrets in Git | Passwords live in the Logstash keystore and root-only env files on the host; gitleaks enforces this in CI, and the rule test blocks real webhook URLs |
 | Credentials not exposed at runtime | The deploy script passes Elasticsearch credentials to curl via stdin, not command-line arguments |
 | Path restriction | The deploy script refuses any checkout path outside the runner's work directory |
 | Change gate | Pull request + green CI before merge; deploys serialised (one at a time) |
@@ -87,6 +90,7 @@ The deploy script was tested against a simulated host before use on elk01:
 | Good change | Applied, only Logstash restarted |
 | Re-run with no changes | "Nothing to deploy" |
 | Elasticsearch API: new objects, re-run, rejected PUT, wrong password, missing credentials | Applied and verified, idempotent, stopped safely, clear error, clear error |
+| ElastAlert2: no change, check mode, threshold change, schema-invalid rule, service unhealthy after restart, rule added then deleted, missing webhook file | Nothing to deploy; diff only; applied + restarted; stopped before any change; rolled back; added then removed; clear error. Webhook ID never appeared in output |
 
 ## Adding integrations
 

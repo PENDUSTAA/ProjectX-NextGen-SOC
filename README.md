@@ -57,13 +57,14 @@ flowchart TB
 | TheHive 5.8: case management (Docker Compose, Community license) | [`hive01/`](hive01/README.md) | ✅ Running, organisation and users set up |
 | Shuffle: SOAR, co-hosted with TheHive | [`hive01/`](hive01/README.md) | ✅ Running; creates TheHive alerts with observables |
 | Detections: ElastAlert2 → Shuffle → TheHive | [`elastalert/`](elastalert/README.md) | ✅ Automatic; first rule (port scan) live |
-| More detection rules (brute force, lateral scan, block spikes); rules deployed by CI | | ⏳ Planned |
+| Detection rules as code: CI checks + deploy with rollback | [`cicd/`](cicd/README.md), [`elastalert/`](elastalert/README.md) | ✅ Live |
+| More detection rules (brute force, lateral scan, block spikes) | | ⏳ Planned |
 | Cortex, MISP, OpenCTI | | ⏳ Planned |
 
 ## How changes are made
 
 1. Edit the configuration on a branch and open a pull request.
-2. CI runs: YAML/JSON lint, secret scan, `logstash -t`, and a parser test using **real OPNsense log lines**.
+2. CI runs: YAML/JSON lint, secret scan, `logstash -t`, a parser test using **real OPNsense log lines**, and detection-rule checks.
 3. Merge to `main` after CI passes.
 4. The runner on elk01 deploys: validate → backup → apply → restart only what changed → health check → **automatic rollback** if unhealthy.
 

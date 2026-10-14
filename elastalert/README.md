@@ -12,11 +12,33 @@ Kibana's webhook connector needs a paid Elastic license, so detections run in **
 | `config.yaml` | `/etc/elastalert/config.yaml` | No credentials |
 | `rules/*.yaml` | `/etc/elastalert/rules/` | Webhook URL is the placeholder `__SHUFFLE_WEBHOOK_URL__`; the real URL is inserted on the host only |
 | `elastalert.service` | `/etc/systemd/system/elastalert.service` | Runs as system user `elastalert` |
+| `tests/sample-event.json` | – | Sample OPNsense event (ECS) used by CI to render each rule's payload |
+| – | `/etc/projectx/shuffle-webhook.env` | `SHUFFLE_WEBHOOK_URL=…`, root 600, **never in Git**; the deploy inserts it into rules |
 | – | `/etc/elastalert/elastalert.env` | `ES_USERNAME` / `ES_PASSWORD`, root:elastalert 640, **never in Git** |
 | – | `/etc/elastalert/http_ca.crt` | Copy of the Elasticsearch HTTP CA |
 | – | `/opt/elastalert2/` | Python venv |
 
-Not deployed by CI yet: copy files manually (below). Adding a `deploy_elastalert` function is the next CI step (see [`cicd/ADDING-INTEGRATIONS.md`](../cicd/ADDING-INTEGRATIONS.md), Level 2).
+## CI/CD
+
+| Stage | What happens |
+|---|---|
+| CI job **ElastAlert2 rules** (`ci/test-elastalert-rules.py`, same ElastAlert2 version as elk01) | ElastAlert2's own schema check with readable errors; `name` = file name and unique; `post2` to the placeholder URL only (fails if a real webhook URL is anywhere under `elastalert/`); payload has `title, description, type, ref, src_ip`; payload renders to valid JSON against `tests/sample-event.json` with no empty fields and a valid `src_ip`; `config.yaml` holds no credentials |
+| Deploy `deploy_elastalert` (in `ci/deploy-elk.sh`) | Stage repo rules with the real URL inserted → diff (URL redacted) → schema check of every staged rule as the `elastalert` user → backup to `/var/backups/projectx/<ts>/elastalert` (mode 700, it contains the URL) → apply config, rules (rules deleted from the repo are removed) and unit → restart → healthy = still active 45 s later with no `Traceback`/`ERROR` in the journal → otherwise **automatic rollback** |
+
+How to add a rule: `docs/ADDING-INTEGRATIONS.md`, **Level 0**.
+
+### One-time host setup for CI deploys
+
+```bash
+# Real webhook URL, root only (the deploy reads it; rules in Git keep the placeholder)
+sudo install -d -m 700 /etc/projectx
+printf 'SHUFFLE_WEBHOOK_URL=%s\n' 'https://192.168.50.15:3443/api/v1/hooks/webhook_<id>' | sudo tee /etc/projectx/shuffle-webhook.env >/dev/null
+sudo chmod 600 /etc/projectx/shuffle-webhook.env
+# Re-install the deploy script (it now includes deploy_elastalert), as for every deploy-script change
+C=/home/gh-runner/actions-runner/_work/projectx-infra/projectx-infra
+sudo install -o root -g root -m 755 $C/ci/deploy-elk.sh /opt/projectx/deploy-elk.sh
+```
+Then *Actions → CI → Run workflow* with mode `check`: the ElastAlert2 section should say `no changes` if the host matches the repo.
 
 ## Rules
 
@@ -24,7 +46,7 @@ Not deployed by CI yet: copy files manually (below). Adding a `deploy_elastalert
 |---|---|---|
 | `opnsense-portscan` | Same `source.ip` hits **> 20 distinct `destination.port`** within 5 min (pass or block); re-alert per IP at most every 30 min | `Port scan detected from <ip>`, type `portscan`, ip observable (MITRE T1046) |
 
-Every rule posts the payload contract from [`hive01/README.md`](../hive01/README.md): `title`, `description`, `type`, `ref` (unique), `src_ip`.
+Every rule posts the payload contract from `hive01/README.md`: `title`, `description`, `type`, `ref` (unique), `src_ip`.
 
 ## Build
 
@@ -82,5 +104,7 @@ Live test for the port-scan rule, from the admin workstation: `nmap -Pn -sT --to
 2. **No run logs without `--verbose`.** The journal only showed "Started"; the rule had in fact already fired. `--verbose` logs every run (`Ran … N hits, N matches, N alerts sent`).
 3. **Heredocs pasted as part of a big block can silently not run.** The env file was missing on the first try. Use `printf … | sudo tee`, and check files with `ls -l` afterwards.
 4. **ElastAlert's indices default to 1 replica** (cluster turns yellow on a single node); the `elastalert` index template sets 0.
-5. **Shuffle uses a self-signed certificate**, so the rule sets `http_post2_ignore_ssl_errors: true` (same as `curl -k`). Hardening item: trust Shuffle's cert instead.
-6. **Count pass and block.** The admin workstation is allowed by the WAN rule for some ports, so its scan is partly logged as `pass`; filtering on `block` only would under-count.
+5. **`elastalert-test-rule --schema-only` only says "not valid under any of the given schemas"** for most mistakes. The CI script re-checks with ElastAlert2's schema and rule/alerter lists to report the actual field (`unknown rule type 'cardinalty'`, `max_cardinality: 'x' is not of type 'integer'`).
+6. **The deploy diff would print the webhook URL** into GitHub logs; all ElastAlert2 diffs and journal output are piped through a redaction filter (`hooks/webhook_<redacted>`).
+7. **Shuffle uses a self-signed certificate**, so the rule sets `http_post2_ignore_ssl_errors: true` (same as `curl -k`). Hardening item: trust Shuffle's cert instead.
+8. **Count pass and block.** The admin workstation is allowed by the WAN rule for some ports, so its scan is partly logged as `pass`; filtering on `block` only would under-count.
