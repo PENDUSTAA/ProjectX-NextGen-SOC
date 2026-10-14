@@ -1,0 +1,44 @@
+# Host sweep from the lab LAN: one LAN host contacts 10+ different private IPs outside the LAN in 5 min.
+# Traffic between two LAN hosts never crosses OPNsense, so only sweeps leaving the LAN are visible.
+# Needs logging on the LAN allow rule (Firewall -> Rules -> LAN).
+name: opnsense-lan-host-sweep
+description: "A lab LAN host contacts 10 or more different private IPs outside the LAN within 5 minutes (MITRE T1046 / T1018)"
+index: logs-opnsense-default
+type: cardinality
+query_key: source.ip
+cardinality_field: destination.ip
+max_cardinality: 9
+timeframe:
+  minutes: 5
+realert:
+  minutes: 30
+filter:
+- term:
+    event.dataset: opnsense.firewall
+- term:
+    source.ip: "192.168.50.0/24"
+- bool:
+    should:
+    - term:
+        destination.ip: "10.0.0.0/8"
+    - term:
+        destination.ip: "172.16.0.0/12"
+    - term:
+        destination.ip: "192.168.0.0/16"
+    minimum_should_match: 1
+    must_not:
+    - term:
+        destination.ip: "192.168.50.0/24"
+alert:
+- post2
+http_post2_url: "__SHUFFLE_WEBHOOK_URL__"
+http_post2_ignore_ssl_errors: true
+jinja_root_name: _data
+http_post2_payload:
+  title: "Host sweep from lab host {{ source.ip }}"
+  description: >-
+    Lab host {{ source.ip }} contacted 10 or more different private IPs outside the lab LAN within 5 minutes
+    (last: {{ destination.ip }}:{{ destination.port }}, action {{ event.action }}). Possible compromised host doing discovery.
+  type: "hostsweep"
+  ref: "hostsweep-{{ source.ip }}-{{ _data['@timestamp'] }}"
+  src_ip: "{{ source.ip }}"
