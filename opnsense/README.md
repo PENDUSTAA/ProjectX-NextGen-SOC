@@ -59,6 +59,8 @@ Everything else inbound on WAN hits the default deny.
 
 **To do:** tighten rule 1 to TCP 443 and 22 only.
 
+**SSH** (*System → Settings → Administration → Secure Shell*): enabled, root + password login (lab). Hardening: named admin user, key-only.
+
 ### LAN
 
 Default rules: allow LAN to any. Outbound NAT is on Automatic.
@@ -98,18 +100,40 @@ grep <unique text> /tmp/rules.debug         # is a rule generated?
 configctl filter reload                     # regenerate + load ruleset
 tail -f /var/log/filter/latest.log          # live firewall log
 tcpdump -n -e -ttt -i pflog0                # decoded live hits
-df -h /                                     # installed to disk (not iso9660/md)?
+df -h /                                     # installed to disk? must NOT be iso9660/cd9660/md
 ```
 
 ## Build notes and gotchas
 
-1. **Live mode vs install.** Booting the ISO starts live mode. Log in as `installer` / `opnsense` to install to disk, then detach the ISO in ESXi.
+1. **Live mode vs install.** Booting the ISO starts live mode. Log in as `installer` / `opnsense` to install to disk, then detach the ISO in ESXi. **This was missed at first:** the gateway ran from the ISO in RAM for three days (11–14 Oct) with all config in memory. A reboot would have wiped the WAN, NAT, rules and remote logging. Found by the blue GUI banner *"You are currently running in live media mode"*; confirmed with `df -h /` showing `/dev/iso9660/OPNSENSE_INSTALL (cd9660, read-only)`. See [Recovering from live mode](#recovering-from-live-mode).
 2. **NIC roles were swapped at first.** em0 defaulted to LAN, which put 192.168.1.1 plus DHCP on the shared 172.16.10.x segment. Re-assigned with console option 1 (em0 = WAN, em1 = LAN). Check the mapping by MAC (`ifconfig em0 | grep ether`) against ESXi.
 3. **DNS failed after the initial setup.** Temporary fix: `echo "nameserver 8.8.8.8" > /etc/resolv.conf`. Permanent fix: set DNS in System → Settings → General.
 4. **GUI from WAN.** `pfctl -d` disables the filter temporarily for first access. Run it from the shell (option 8), not at the menu prompt. Any filter reload turns it back on.
 5. **A saved rule is not a loaded rule.** The WAN rule was in `/conf/config.xml`, but traffic still hit default deny (label `02f4bab0…`). Apply had not regenerated `/tmp/rules.debug`. `configctl filter reload` fixed it. Always confirm with `pfctl -sr | grep`.
 6. **Leftover RST blocks after a reload.** After a reload the state table is empty, so RST/ACK packets from old sessions hit default deny. The rule only creates state on SYN (`flags S/SA`). This is harmless.
 7. **Source must be an IP, not a MAC.** Traffic from 172.16.20.x is routed through FortiGate, so source MACs are rewritten. Use IP or network aliases for WAN rules.
+
+## Recovering from live mode
+
+How the running live config was moved to a real install (2026-10-14), with no loss:
+
+1. **Back up twice.** GUI: *System → Configuration → Backups → Download*. And to elk01 from the OPNsense shell (csh: backticks, not `$( )`):
+   ```sh
+   scp /conf/config.xml elk@192.168.50.10:opnsense-config-`date +%Y%m%d`.xml
+   ```
+2. **Install** from the ESXi console: `opnsense-installer` (or log in as `installer`) → *Install (UFS)* → disk `da0` → set root password.
+3. **The installer reboots by itself after 5 s.** ESXi refuses to eject the CD while live mode uses it ("guest has locked the CD-ROM door"); answer *No*. Power off the VM, untick *Connected* / *Connect at power on* on the CD drive (or remove it), power on.
+4. **The installed system starts with factory defaults.** Live-mode changes are not carried over. From the ESXi console: option 1 (em0 = WAN, em1 = LAN), option 2 (LAN 192.168.50.1/24), then shell:
+   ```sh
+   df -h / /conf                         # must be /dev/gpt/rootfs, not iso9660
+   scp elk@192.168.50.10:opnsense-config-YYYYMMDD.xml /conf/config.xml
+   grep -c "<rule>" /conf/config.xml     # sanity check
+   reboot
+   ```
+   Everything returns: interfaces, rules, NAT, DNS, remote logging, and the old root password (it is in the config).
+5. **Enable SSH.** Live mode enables SSH on its own; the saved config didn't, so after the install port 22 timed out. *System → Settings → Administration → Secure Shell*: enable, permit root login, permit password login (hardening: named admin user + keys instead).
+
+Downtime was about 20 minutes. Every lab service (SSH, Kibana, TheHive, Shuffle, log ingestion) depends on the gateway.
 
 ## Not in this repo
 
