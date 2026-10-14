@@ -1,13 +1,13 @@
-# Block spike: blocked firewall events in the last 5 min are 4x the 5 min before, and at least 300.
-# Catches scans, floods and misbehaving hosts as a whole; the per-source rules name the culprit.
-# Tune threshold_cur / spike_height to the lab's normal block rate (Kibana: event.action:block, 5 min buckets).
+# Block burst: 30+ blocked firewall events within 5 minutes, across all sources.
+# Baseline measured 2026-10-14: 0-6 blocked events per HOUR, so 30 in 5 min is far above normal.
+# Fixed threshold (frequency), not a spike ratio: with a near-zero baseline a steady burst never
+# reaches "4x the previous window" (replay of the 17:00-17:45 burst: 229 blocks, 0 spike matches).
+# Catches scans, floods and misconfigurations as a whole; the per-source rules name the culprit.
 name: opnsense-block-spike
-description: "Blocked OPNsense events spike to 4x the previous 5 minutes (minimum 300 in 5 minutes)"
+description: "30 or more blocked OPNsense events within 5 minutes (normal: 0-6 per hour)"
 index: logs-opnsense-default
-type: spike
-spike_type: up
-spike_height: 4
-threshold_cur: 300
+type: frequency
+num_events: 30
 timeframe:
   minutes: 5
 realert:
@@ -23,11 +23,11 @@ http_post2_url: "__SHUFFLE_WEBHOOK_URL__"
 http_post2_ignore_ssl_errors: true
 jinja_root_name: _data
 http_post2_payload:
-  title: "Spike in blocked traffic on OPNsense"
+  title: "Burst of blocked traffic on OPNsense"
   description: >-
-    Blocked events in the last 5 minutes: {{ spike_count }} (previous 5 minutes: {{ reference_count }}).
-    Sample blocked source: {{ source.ip }} -> {{ destination.ip }}:{{ destination.port }} on {{ observer.ingress.interface.name }}.
-    Check the port-scan and brute-force alerts for the same time.
-  type: "blockspike"
-  ref: "blockspike-{{ _data['@timestamp'] }}"
+    30 or more blocked firewall events within 5 minutes (normal: 0-6 per hour).
+    Latest blocked: {{ source.ip }} -> {{ destination.ip }}:{{ destination.port }} on {{ observer.ingress.interface.name }}.
+    Check port-scan and brute-force alerts for the same time.
+  type: "blockburst"
+  ref: "blockburst-{{ _data['@timestamp'] }}"
   src_ip: "{{ source.ip }}"
