@@ -39,7 +39,7 @@ flowchart TB
     OPNL -- "firewall logs (syslog RFC5424)" --> LS --> ES --> KB
     ADMIN -. "NAT 2210 SSH · 5601 Kibana<br/>8443 TheHive · 3443 Shuffle" .-> WAN
     KB -. "alerts (planned)" .-> SH
-    SH -- "create alert / case" --> TH
+    SH -- "create alert + observables (API)" --> TH
     RUN -- "outbound HTTPS only" --> GH
     RUN -- "deploy-elk.sh" --> LS
     RUN -- "deploy-elk.sh" --> ES
@@ -54,7 +54,7 @@ flowchart TB
 | Retention: 90-day ILM, single-node replica fix | [`elk/`](elk/README.md#retention-and-index-settings) | ✅ Cluster green, deployed through CI/CD |
 | CI/CD: tests, deploy with rollback, PR workflow | [`cicd/`](cicd/README.md) | ✅ Live on elk01 |
 | TheHive 5.8: case management (Docker Compose, Community license) | [`hive01/`](hive01/README.md) | ✅ Running, organisation and users set up |
-| Shuffle: SOAR, co-hosted with TheHive | [`hive01/`](hive01/README.md) | ✅ Running; TheHive integration next |
+| Shuffle: SOAR, co-hosted with TheHive | [`hive01/`](hive01/README.md) | ✅ Running; creates TheHive alerts with observables |
 | Detection rules (port scan, brute force, lateral scan, block spikes) | | ⏳ Planned |
 | Cortex, MISP, OpenCTI | | ⏳ Planned |
 

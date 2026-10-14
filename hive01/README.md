@@ -94,7 +94,7 @@ Service accounts and read-only users don't count toward the 2 licensed seats. Ot
 
 | From → To | How |
 |---|---|
-| Shuffle → TheHive | TheHive app in Shuffle, URL `https://192.168.50.15`, API key of `svc-shuffle`, SSL verify off (self-signed) |
+| Shuffle → TheHive | ✅ **Working.** TheHive app in Shuffle, URL `https://192.168.50.15`, API key of `svc-shuffle`. Test workflow `Test - TheHive alert` creates alerts with observables |
 | ELK → Shuffle → TheHive | Kibana detection alerts → Shuffle webhook → TheHive alert/case |
 | TheHive → Cortex (`.13`), MISP (`.12`) | Later, one of each allowed by Community license |
 
@@ -108,6 +108,40 @@ Service accounts and read-only users don't count toward the 2 licensed seats. Ot
 6. **Port 443 on the WAN is OPNsense's GUI**, so TheHive is published on WAN 8443. Port 9000 (TheHive direct, no TLS) and 9200 (OpenSearch) are never forwarded.
 7. **Port forward "saved ≠ loaded"** (same as the OPNsense build). Confirm with `pfctl -sn | grep <port>` and `pfctl -sr | grep <port>`, then `configctl filter reload` if empty.
 8. **init.sh run as root.** StrangeBee's guide says run as a normal user (TheHive runs as that user). It works; keep using the same user for `docker compose` in that folder.
+
+## Shuffle → TheHive: working alert body
+
+Use the TheHive app action **Create alert** in **Advanced** mode, and replace the whole `body` with real JSON:
+
+```json
+{
+  "title": "Port scan detected from 172.16.20.53",
+  "description": "Simulated detection: 25 distinct destination ports blocked on OPNsense WAN (em0) within 5 minutes.",
+  "type": "opnsense-portscan",
+  "source": "shuffle",
+  "sourceRef": "scan-{{ 'now' | date: '%s' }}",
+  "severity": 2, "tlp": 2, "pap": 2, "flag": false,
+  "tags": ["opnsense", "portscan", "T1046"],
+  "observables": [
+    {"dataType": "ip", "data": "172.16.20.53", "message": "Scanning source", "tags": ["source"]},
+    {"dataType": "ip", "data": "172.16.10.17", "message": "Target: OPNsense WAN", "tags": ["target"]}
+  ]
+}
+```
+
+- `type:source:sourceRef` must be unique per alert. Liquid (`{{ 'now' | date: '%s' }}`) works in the body and gives each test run a fresh ID. Real alerts should use the original detection's ID, which also de-duplicates.
+- Numbers and booleans unquoted; `tags` is a list.
+- View alerts as a **Project-X user** (e.g. the team lead account). `admin@thehive.local` is platform admin and cannot see organisation alerts or cases.
+
+### Shuffle troubleshooting (what we hit)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Run stuck in EXECUTING on first use of an app | Orborus downloading the app image (~500 MB) | Wait; check `docker logs shuffle-orborus` |
+| 401 `AuthenticationError` | Wrong key stored in Shuffle. Key was valid (`curl -H "Authorization: Bearer $KEY" https://192.168.50.15/api/v1/user/current` → 200) | Delete and re-add the app authentication |
+| 400 `Invalid json`, `Unrecognized token '$'` or `'f'` | **Create alert** body is a template with `{placeholders}`; unfilled ones break the JSON | Advanced → replace the whole body |
+| 400 `CreateError ... already exists` | Duplicate `type:source:sourceRef`; the earlier run *did* create the alert | Unique `sourceRef` |
+| Editing in **App editor** | That screen edits the app definition (header names), not credentials | Credentials go in the node's *Authenticate* / Admin → App Authentication |
 
 ## Operations
 
