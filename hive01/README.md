@@ -84,7 +84,7 @@ Then open Shuffle immediately and create the admin account. The first visitor to
 
 | Item | Value |
 |---|---|
-| License | Platinum trial at install → **Community** license via StrangeBee portal (2 licensed users, 1 org, 1 Cortex, 1 MISP) |
+| License | Platinum trial at install → **Community** license via StrangeBee portal, **activated 2026-10-14** (2 licensed users, 1 org, 1 Cortex, 1 MISP) |
 | Organisation | `Project-X` |
 | Users | `admin@projectx.local` Normal / org-admin (team lead); `analyst@projectx.local` Normal / analyst; `svc-shuffle@projectx.local` **Service** / analyst (API key for Shuffle) |
 
