@@ -97,7 +97,7 @@ Service accounts and read-only users don't count toward the 2 licensed seats. Ot
 | Shuffle → TheHive | ✅ **Working.** TheHive app in Shuffle, URL `https://192.168.50.15`, API key of `svc-shuffle`. Test workflow `Test - TheHive alert` creates alerts with observables |
 | elk01 → Shuffle → TheHive | ✅ **Working, automatic (2026-10-14).** ElastAlert2 on elk01 ([`../elastalert/`](../elastalert/README.md)) → webhook trigger `elk-alerts` → TheHive 1 *Create alert*. First live detection: nmap port scan → TheHive alert in ~1 min |
 | TheHive → Cortex (`.13`) | ✅ **Working (2026-10-15).** Connector `cortex01` → `https://192.168.50.13`, svc-thehive key; see [`../cortex01/`](../cortex01/README.md) |
-| TheHive → MISP (`.12`) | Later (Community license allows one) |
+| MISP (`.12`) → alerts | ✅ **Working (2026-10-15)** via Cortex `MISP_2_1` analyzer + auto-enrichment; see [`../misp01/`](../misp01/README.md). Direct TheHive ↔ MISP connector (case export) later |
 
 Kibana's own webhook connector needs a paid Elastic license, so ElastAlert2 (open source) does the ELK → Shuffle step.
 

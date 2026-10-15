@@ -76,6 +76,7 @@ Temporary admin access to lab VMs, used until the FortiGate route and policy are
 | 8443/tcp | 172.16.20.0/24 | 192.168.50.15:443 | TheHive (via its nginx, HTTPS) |
 | 3443/tcp | 172.16.20.0/24 | 192.168.50.15:3443 | Shuffle (HTTPS) |
 | 9443/tcp | 172.16.20.0/24 | 192.168.50.13:443 | Cortex (HTTPS) |
+| 7443/tcp | 172.16.20.0/24 | 192.168.50.12:443 | MISP (HTTPS) |
 
 Destination port must never be *any*. That would redirect 443 too and lock you out of the OPNsense GUI. In the Source field, the mask goes in the separate dropdown: type `172.16.20.0` and select `24`, not `172.16.20.0/24`.
 
@@ -92,6 +93,7 @@ Destination port must never be *any*. That would redirect 443 too and lock you o
 - TheHive: `https://172.16.10.17:8443`
 - Shuffle: `https://172.16.10.17:3443`
 - Cortex: `https://172.16.10.17:9443`
+- MISP: `https://172.16.10.17:7443`
 
 ## Verification commands
 

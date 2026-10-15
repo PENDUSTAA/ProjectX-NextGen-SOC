@@ -33,6 +33,9 @@ flowchart TB
             subgraph CX01["cortex01 · 192.168.50.13"]
                 CX["Cortex 4.1<br/>analyzers"]
             end
+            subgraph MISP01["misp01 · 192.168.50.12"]
+                MI["MISP 2.5<br/>threat intel"]
+            end
         end
     end
 
@@ -41,11 +44,14 @@ flowchart TB
     ADMIN -- routed --> FGT --> WAN
     WAN --- OPNL
     OPNL -- "firewall logs (syslog RFC5424)" --> LS --> ES --> KB
-    ADMIN -. "NAT 2210 SSH · 5601 Kibana<br/>8443 TheHive · 3443 Shuffle · 9443 Cortex" .-> WAN
+    ADMIN -. "NAT 2210 SSH · 5601 Kibana<br/>8443 TheHive · 3443 Shuffle · 9443 Cortex · 7443 MISP" .-> WAN
     ES --> EA -- "webhook: detections" --> SH
     SH -- "create alert + observables (API)" --> TH
     TH -- "run analyzers (API)" --> CX
-    CX -. "analyzer lookups (HTTPS)" .-> NET["Internet threat-intel services"]
+    CX -- "MISP analyzer" --> MI
+    CX -. "VirusTotal, AbuseIPDB, DShield…" .-> NET["Internet threat-intel services"]
+    NET -. "feeds (Tor exits, blocklists, CIRCL OSINT)" .-> MI
+    SH -- "auto-enrich new alerts" --> TH
     RUN -- "outbound HTTPS only" --> GH
     RUN -- "deploy-elk.sh" --> LS
     RUN -- "deploy-elk.sh" --> ES
@@ -62,11 +68,13 @@ flowchart TB
 | TheHive 5.8: case management (Docker Compose, Community license) | [`hive01/`](hive01/README.md) | ✅ Running, organisation and users set up |
 | Shuffle: SOAR, co-hosted with TheHive | [`hive01/`](hive01/README.md) | ✅ Running; creates TheHive alerts with observables |
 | Cortex 4.1: observable enrichment (Abuse_Finder, DShield, Robtex), connected to TheHive | [`cortex01/`](cortex01/README.md) | ✅ Running; analyzers run from TheHive observables |
+| MISP 2.5: threat-intel feeds (Tor exits, blocklist.de, Feodo C2, CIRCL OSINT), searched by Cortex | [`misp01/`](misp01/README.md) | ✅ Running; demo attacker matched to Tor exit feed automatically |
+| Automatic enrichment: every new alert runs all matching analyzers (Shuffle) | [`shuffle/`](shuffle/auto-enrich.py) | ✅ Live (VirusTotal, AbuseIPDB, DShield, Robtex, Abuse_Finder, MISP) |
 | Detections: ElastAlert2 → Shuffle → TheHive | [`elastalert/`](elastalert/README.md) | ✅ 4 rules live, each tested end to end: port scan, SSH brute force, LAN host sweep, block burst |
 | Detection rules as code: CI checks + deploy with rollback | [`cicd/`](cicd/README.md), [`elastalert/`](elastalert/README.md) | ✅ Live |
 | Lab-internal (east-west) detection | | ⏳ Needs host telemetry (traffic between LAN hosts never crosses the firewall) |
 | MITRE ATT&CK technique on every alert (TTPs tab) | [`hive01/`](hive01/README.md) | ✅ Live |
-| MISP, OpenCTI | | ⏳ Planned |
+| OpenCTI | | ⏳ Planned (after submission) |
 
 ## How changes are made
 
@@ -86,6 +94,9 @@ elk/            SIEM build: configs, Logstash pipeline, retention objects, gotch
   kibana/          kibana.yml additions
   logstash/        conf.d/ split pipeline, tests/ sample logs
 elastalert/     Detection rules (ElastAlert2): config, rules, service, build notes
+misp01/         Threat intelligence: MISP stack, feeds, Cortex integration, gotchas
+shuffle/        SOAR logic kept in Git (auto-enrichment step)
+demo/           Attack simulator: synthetic firewall logs through the whole pipeline
 cortex01/       Observable analysis: Cortex stack, analyzers, TheHive connector, gotchas
 hive01/         Case management + SOAR: TheHive and Shuffle stacks, ports, users, gotchas
 cicd/           Pipeline reference: workflow, test + deploy scripts, integration guide
@@ -103,5 +114,6 @@ cicd/           Pipeline reference: workflow, test + deploy scripts, integration
 | TheHive and Shuffle on one VM, separate Compose stacks | Matches the architecture plan (host .15); each product keeps its own datastore (TheHive's Elasticsearch is not the SIEM's) and can be upgraded independently |
 | Integration accounts as TheHive *Service* users | API-only, least privilege (`analyst`), and they don't consume licensed seats |
 | ElastAlert2 instead of Kibana connectors | Kibana's webhook connector needs a paid Elastic license; ElastAlert2 is open source and its rules are YAML that fits the CI pipeline |
+| MISP queried through Cortex, not a direct TheHive import | Every alert gets an IOC match result without flooding TheHive with thousands of feed events as alerts |
 | Cortex on its own VM | StrangeBee recommends 16 GB for Cortex + its Elasticsearch; analyzers run as extra containers, so it doesn't share hive01's memory |
 | Self-hosted runner, root-owned deploy script | Deploys from inside the lab with no inbound access; the repo cannot change what runs as root |

@@ -38,12 +38,18 @@ curl -sk https://localhost/api/status | jq -r .versions.Cortex    # 4.1.0-1
 | Superadmin | `admin` (platform only) |
 | Organisation | `ProjectX` |
 | Users | `admin@projectx.local` read/analyze/orgadmin (team lead); `svc-thehive@projectx.local` **read/analyze** (API key used by TheHive) |
-| Analyzers enabled | `Abuse_Finder_3_0`, `DShield_lookup_1_0`, `Robtex_IP_Query_1_0` (no API key needed) |
+| Analyzers enabled | `Abuse_Finder_3_0`, `DShield_lookup_1_0`, `Robtex_IP_Query_1_0` (no key); `AbuseIPDB_2_0`, `VirusTotal_GetReport_3_1` (free API keys, stored only in Cortex; VT rate limit 4/min); `MISP_2_1` (searches misp01, see [`../misp01/`](../misp01/README.md)) |
 | TheHive connector | *Platform management → Connectors → Cortex*: server `cortex01`, URL `https://192.168.50.13`, svc-thehive key, CA check off (self-signed), all organisations |
 
 Tested 2026-10-15: case observable `ip 103.16.182.23` → *Run analyzers* → reports and taxonomy tags back in TheHive.
 
 **Public-IP only:** these analyzers query internet services, so private IPs (10.x, 192.168.x) return nothing. Expected, not an error.
+
+## Automatic enrichment (Shuffle)
+
+Every new alert is enriched without analyst action: the Shuffle step `auto_enrich` (source: [`../shuffle/auto-enrich.py`](../shuffle/auto-enrich.py), *Shuffle Tools → Execute python*, after *TheHive 1*) lists the alert's observables, lists the analyzers TheHive knows, and starts every matching analyzer **through TheHive** (`/api/connector/cortex/job`), so reports and taxonomy tags land on the alert. Non-global IPs (RFC1918 etc.) are skipped to save API quota.
+
+Tested 2026-10-15 with `demo/simulate-attack.sh portscan 45.155.205.233`: alert → 5 analyzers ran automatically within ~4 min; VirusTotal `18/92` (red), AbuseIPDB usage "Data Center/Web Hosting".
 
 ## Build notes and gotchas
 
@@ -65,6 +71,4 @@ ls -l /var/run/docker.sock        # must stay group docker
 
 ## Next
 
-- Free-key analyzers: AbuseIPDB, VirusTotal (better reputation data)
-- Auto-run analyzers on new alerts (Shuffle or TheHive automation)
 - Hardening: trust Cortex's certificate in TheHive instead of disabling the CA check
