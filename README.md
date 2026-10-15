@@ -65,7 +65,7 @@ flowchart TB
 | Detections: ElastAlert2 → Shuffle → TheHive | [`elastalert/`](elastalert/README.md) | ✅ 4 rules live, each tested end to end: port scan, SSH brute force, LAN host sweep, block burst |
 | Detection rules as code: CI checks + deploy with rollback | [`cicd/`](cicd/README.md), [`elastalert/`](elastalert/README.md) | ✅ Live |
 | Lab-internal (east-west) detection | | ⏳ Needs host telemetry (traffic between LAN hosts never crosses the firewall) |
-| MITRE technique on TheHive alerts (TTPs tab) | | ⏳ Planned |
+| MITRE ATT&CK technique on every alert (TTPs tab) | [`hive01/`](hive01/README.md) | ✅ Live |
 | MISP, OpenCTI | | ⏳ Planned |
 
 ## How changes are made

@@ -42,3 +42,5 @@ http_post2_payload:
   type: "hostsweep"
   ref: "hostsweep-{{ source.ip }}-{{ _data['@timestamp'] }}"
   src_ip: "{{ source.ip }}"
+  mitre: "T1018"
+  tactic: "discovery"

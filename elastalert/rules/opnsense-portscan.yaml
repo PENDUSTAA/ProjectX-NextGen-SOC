@@ -29,3 +29,5 @@ http_post2_payload:
   type: "portscan"
   ref: "portscan-{{ source.ip }}-{{ _data['@timestamp'] }}"
   src_ip: "{{ source.ip }}"
+  mitre: "T1046"
+  tactic: "discovery"

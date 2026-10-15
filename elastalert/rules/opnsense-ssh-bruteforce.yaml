@@ -32,3 +32,5 @@ http_post2_payload:
   type: "bruteforce"
   ref: "bruteforce-{{ source.ip }}-{{ _data['@timestamp'] }}"
   src_ip: "{{ source.ip }}"
+  mitre: "T1110"
+  tactic: "credential-access"

@@ -34,7 +34,10 @@ EA = ROOT / "elastalert"
 RULES = sorted((EA / "rules").glob("*.yaml"))
 SAMPLE = json.loads((EA / "tests" / "sample-event.json").read_text())
 PLACEHOLDER = "__SHUFFLE_WEBHOOK_URL__"
-PAYLOAD_KEYS = ["title", "description", "type", "ref", "src_ip"]
+PAYLOAD_KEYS = ["title", "description", "type", "ref", "src_ip", "mitre", "tactic"]
+TACTICS = {"reconnaissance", "resource-development", "initial-access", "execution", "persistence",
+           "privilege-escalation", "defense-evasion", "credential-access", "discovery", "lateral-movement",
+           "collection", "command-and-control", "exfiltration", "impact"}
 BIN = Path(sys.executable).parent
 SCHEMA = jsonschema.Draft7Validator(yaml.safe_load((Path(elastalert.__file__).parent / "schema.yaml").read_text()))
 
@@ -141,7 +144,13 @@ for rule_path in RULES:
     except ValueError:
         err(rule_path, f"src_ip renders to '{sent['src_ip']}', not an IP address")
         continue
-    ok(rule_path, f"payload renders: {sent['title']}")
+    if not re.fullmatch(r"T\d{4}(\.\d{3})?", sent["mitre"]):
+        err(rule_path, f"mitre must be an ATT&CK technique ID like T1046 or T1110.001, got '{sent['mitre']}'")
+        continue
+    if sent["tactic"] not in TACTICS:
+        err(rule_path, f"tactic '{sent['tactic']}' is not an ATT&CK tactic name (lowercase, hyphenated, e.g. credential-access)")
+        continue
+    ok(rule_path, f"payload renders: {sent['title']} [{sent['mitre']} / {sent['tactic']}]")
 
 if failed:
     sys.exit(1)

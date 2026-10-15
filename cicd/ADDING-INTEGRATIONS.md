@@ -39,7 +39,7 @@ One YAML file in `elastalert/rules/`. CI checks it; the deploy copies it to elk0
 2. Set `name:` to exactly `<rule-name>` (CI checks this).
 3. Change the detection part: `type`, `filter`, thresholds. Rule types: [ElastAlert2 docs](https://elastalert2.readthedocs.io/en/latest/ruletypes.html). Field names are the ECS names you see in Kibana Discover (`source.ip`, `destination.port`, `event.action`…).
 4. Keep `alert: [post2]` and `http_post2_url: "__SHUFFLE_WEBHOOK_URL__"` exactly as they are. **Never paste the real webhook URL**; CI fails if you do.
-5. Fill `http_post2_payload` with the five fields Shuffle expects: `title`, `description`, `type` (short, e.g. `bruteforce`), `ref` (unique per alert, include `{{ source.ip }}` and `{{ _data['@timestamp'] }}`), `src_ip`.
+5. Fill `http_post2_payload` with the seven fields Shuffle expects: `title`, `description`, `type` (short, e.g. `bruteforce`), `ref` (unique per alert, include `{{ source.ip }}` and `{{ _data['@timestamp'] }}`), `src_ip`, `mitre` (ATT&CK technique ID, e.g. `T1110`; look it up on attack.mitre.org) and `tactic` (e.g. `credential-access`).
 6. If your rule uses fields that aren't in `elastalert/tests/sample-event.json`, add them there, or CI reports the payload renders empty.
 7. PR → CI → merge → deploy (daily workflow above).
 8. Test it for real and check TheHive Alerts.
@@ -56,6 +56,7 @@ sudo -u elastalert bash -c 'cd /tmp && set -a && . /etc/elastalert/elastalert.en
 | `<option>: … is not of type …` | Wrong value type, e.g. a number in quotes |
 | `rule does not match the ElastAlert2 schema` | Misspelled option name, e.g. `minutez`; compare with the docs |
 | `must be the placeholder` / `contains a real Shuffle webhook URL` | Put `__SHUFFLE_WEBHOOK_URL__` back |
+| `mitre must be an ATT&CK technique ID` / `tactic … is not an ATT&CK tactic` | Use `T` + 4 digits (optionally `.001`), and a tactic name like `discovery`, `credential-access` |
 | `payload fields render empty` | Field name in `{{ … }}` doesn't exist in the sample event (or in your data) |
 
 ---

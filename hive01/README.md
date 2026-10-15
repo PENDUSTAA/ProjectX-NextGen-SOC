@@ -111,8 +111,10 @@ Workflow: **Webhook `elk-alerts` → TheHive 1 (Create alert, Advanced)**. Click
 TheHive 1 body; `$exec` is the JSON posted to the webhook:
 
 ```json
-{"title":"$exec.title","description":"$exec.description","type":"$exec.type","source":"elk","sourceRef":"$exec.ref","severity":2,"tlp":2,"pap":2,"flag":false,"tags":["elk","$exec.type"],"observables":[{"dataType":"ip","data":"$exec.src_ip","message":"Source IP"}]}
+{"title":"$exec.title","description":"$exec.description","type":"$exec.type","source":"elk","sourceRef":"$exec.ref","severity":2,"tlp":2,"pap":2,"flag":false,"tags":["elk","$exec.type","$exec.mitre"],"observables":[{"dataType":"ip","data":"$exec.src_ip","message":"Source IP"}],"procedures":[{"patternId":"$exec.mitre","tactic":"$exec.tactic","occurDate":{{ 'now' | date: '%s' }}000}]}
 ```
+
+`procedures` fills the alert's **TTPs** tab (tested 2026-10-15: T1046 → *Network Service Discovery*). TheHive rejects the whole alert if `patternId` is not in its ATT&CK catalogue (*Entities management → ATT&CK patterns*), so import the catalogue before adding a new technique.
 
 Payload contract (what the sender must post):
 
@@ -123,6 +125,8 @@ Payload contract (what the sender must post):
 | `type` | `portscan` | Also added as a tag |
 | `ref` | `wh-1760414544` | Must be unique per alert (`type:source:sourceRef`); use the detection's ID so repeats de-duplicate |
 | `src_ip` | `172.16.20.53` | Becomes an `ip` observable |
+| `mitre` | `T1046` | ATT&CK technique ID → TheHive TTP (*procedure*). Must exist in TheHive's ATT&CK catalogue |
+| `tactic` | `discovery` | ATT&CK tactic, lowercase-hyphenated (`credential-access`) |
 
 Test from elk01:
 

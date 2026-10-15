@@ -31,3 +31,5 @@ http_post2_payload:
   type: "blockburst"
   ref: "blockburst-{{ _data['@timestamp'] }}"
   src_ip: "{{ source.ip }}"
+  mitre: "T1595"
+  tactic: "reconnaissance"
