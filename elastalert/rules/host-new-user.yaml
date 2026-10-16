@@ -1,0 +1,28 @@
+# A local user account is created on a lab server (Auditbeat system/user state change).
+name: host-new-user
+description: "New local user account created on a lab server (MITRE T1136)"
+index: auditbeat-*
+type: any
+query_key: host.name
+realert:
+  minutes: 5
+filter:
+- term:
+    event.module: system
+- term:
+    event.action: user_added
+alert:
+- post2
+http_post2_url: "__SHUFFLE_WEBHOOK_URL__"
+http_post2_ignore_ssl_errors: true
+jinja_root_name: _data
+http_post2_payload:
+  title: "New user {{ user.name }} created on {{ host.name }}"
+  description: >-
+    Local account {{ user.name }} was added on {{ host.name }}. Confirm it was a planned change
+    (persistence via new account is a common attacker step).
+  type: "new-user"
+  ref: "new-user-{{ host.name }}-{{ user.name }}-{{ _data['@timestamp'] }}"
+  src_ip: "{% set ns = namespace(ip='') %}{% for i in host.ip %}{% if not ns.ip and ':' not in i %}{% set ns.ip = i %}{% endif %}{% endfor %}{{ ns.ip }}"
+  mitre: "T1136"
+  tactic: "persistence"

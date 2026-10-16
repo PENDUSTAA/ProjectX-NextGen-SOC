@@ -67,9 +67,17 @@ jobs:
       - name: Schema, placeholder URL, payload contract, render test
         run: python ci/test-elastalert-rules.py
 
+  auditbeat:
+    name: Auditbeat config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: auditbeat test config (real 8.19.23 binary)
+        run: bash ci/test-auditbeat-config.sh
+
   deploy:
     name: Deploy to elk01
-    needs: [lint, secrets, logstash, elastalert]
+    needs: [lint, secrets, logstash, elastalert, auditbeat]
     # Manual runs always allowed (default: check only). Auto-deploy on merge to main
     # only after the repo variable DEPLOY_ENABLED is set to "true".
     if: >-

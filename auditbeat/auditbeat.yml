@@ -1,0 +1,73 @@
+# Auditbeat 8.19 on the Linux lab servers (elk01, hive01, cortex01, misp01) -> /etc/auditbeat/auditbeat.yml
+# Same file on every host. The ES password comes from the Auditbeat keystore (key ES_PWD), never from Git.
+# One-time index setup (template, ILM, 0 replicas) is done from elk01 as `elastic`; agents only write.
+
+auditbeat.modules:
+
+# Kernel audit: commands run by real users (auid >= 1000, not daemons/containers) + identity file changes
+- module: auditd
+  resolve_ids: true
+  failure_mode: log
+  backlog_limit: 8192
+  rate_limit: 200
+  include_raw_message: false
+  include_warnings: false
+  audit_rules: |
+    -a always,exit -F arch=b64 -S execve -F auid>=1000 -F auid!=4294967295 -k user_exec
+    -a always,exit -F arch=b32 -S execve -F auid>=1000 -F auid!=4294967295 -k user_exec
+    -w /etc/passwd -p wa -k identity
+    -w /etc/group -p wa -k identity
+    -w /etc/shadow -p wa -k identity
+    -w /etc/sudoers -p wa -k sudoers
+    -w /etc/sudoers.d/ -p wa -k sudoers
+
+# File integrity: SSH config/keys, sudoers, cron, systemd units
+- module: file_integrity
+  paths:
+  - /etc/ssh
+  - /etc/sudoers.d
+  - /etc/cron.d
+  - /etc/systemd/system
+  - /root/.ssh
+  recursive: false
+  scan_at_start: true
+
+# System: logins (incl. failed SSH via btmp), user/group changes, installed packages, host info
+- module: system
+  datasets:
+  - host
+  - login
+  - user
+  - package
+  period: 1m
+  state.period: 12h
+  user.detect_password_changes: true
+  login.wtmp_file_pattern: /var/log/wtmp*
+  login.btmp_file_pattern: /var/log/btmp*
+
+processors:
+- add_host_metadata: ~
+
+output.elasticsearch:
+  hosts: ["https://192.168.50.10:9200"]
+  username: "auditbeat_writer"
+  password: "${ES_PWD}"
+  ssl.certificate_authorities: ["/etc/auditbeat/http_ca.crt"]
+
+# Index management is done once from elk01 (see auditbeat/README.md); agents must not try (no privileges)
+setup.template.enabled: false
+setup.ilm.enabled: true
+setup.ilm.policy_name: "projectx-logs-90d"
+setup.ilm.check_exists: false
+setup.ilm.overwrite: false
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/auditbeat
+  keepfiles: 7
+  permissions: 0640
+monitoring.enabled: false

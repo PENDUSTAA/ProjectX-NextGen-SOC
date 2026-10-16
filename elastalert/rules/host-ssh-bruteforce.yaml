@@ -1,0 +1,36 @@
+# Failed SSH/console logins on a lab server (Auditbeat system/login, from btmp).
+# Unlike opnsense-ssh-bruteforce, this also sees lab-to-lab (east-west) attempts that never cross the firewall.
+name: host-ssh-bruteforce
+description: "5 or more failed logins on a lab server from the same source within 2 minutes (MITRE T1110)"
+index: auditbeat-*
+type: frequency
+query_key: source.ip
+num_events: 5
+timeframe:
+  minutes: 2
+realert:
+  minutes: 30
+filter:
+- term:
+    event.module: system
+- term:
+    event.action: user_login
+- term:
+    event.outcome: failure
+- exists:
+    field: source.ip
+alert:
+- post2
+http_post2_url: "__SHUFFLE_WEBHOOK_URL__"
+http_post2_ignore_ssl_errors: true
+jinja_root_name: _data
+http_post2_payload:
+  title: "Failed logins on {{ host.name }} from {{ source.ip }}"
+  description: >-
+    {{ source.ip }} failed to log in to {{ host.name }} 5 or more times within 2 minutes
+    (last user tried: {{ user.name }}). Source inside the lab LAN = possible lateral movement.
+  type: "host-bruteforce"
+  ref: "host-bruteforce-{{ host.name }}-{{ source.ip }}-{{ _data['@timestamp'] }}"
+  src_ip: "{{ source.ip }}"
+  mitre: "T1110"
+  tactic: "credential-access"

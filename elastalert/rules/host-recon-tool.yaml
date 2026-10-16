@@ -1,0 +1,28 @@
+# A user runs a network recon / attack tool on a lab server (Auditbeat auditd execve, real users only).
+name: host-recon-tool
+description: "Recon or attack tool executed by a user on a lab server (MITRE T1046)"
+index: auditbeat-*
+type: any
+query_key: host.name
+realert:
+  minutes: 30
+filter:
+- term:
+    event.module: auditd
+- terms:
+    process.name: [nmap, masscan, zmap, nc, ncat, netcat, hydra, medusa, nikto, sqlmap, enum4linux, crackmapexec, responder]
+alert:
+- post2
+http_post2_url: "__SHUFFLE_WEBHOOK_URL__"
+http_post2_ignore_ssl_errors: true
+jinja_root_name: _data
+http_post2_payload:
+  title: "Recon tool {{ process.name }} run on {{ host.name }}"
+  description: >-
+    User {{ user.name }} ran {{ process.executable }} on {{ host.name }}:
+    {{ process.args | join(' ') }}
+  type: "recon-tool"
+  ref: "recon-tool-{{ host.name }}-{{ _data['@timestamp'] }}"
+  src_ip: "{% set ns = namespace(ip='') %}{% for i in host.ip %}{% if not ns.ip and ':' not in i %}{% set ns.ip = i %}{% endif %}{% endfor %}{{ ns.ip }}"
+  mitre: "T1046"
+  tactic: "discovery"

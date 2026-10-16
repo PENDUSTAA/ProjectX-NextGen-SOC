@@ -25,6 +25,7 @@ flowchart TB
                 KB["Kibana<br/>:5601"]
                 EA["ElastAlert2<br/>detection rules"]
                 RUN["GitHub Actions<br/>self-hosted runner"]
+                AB["Auditbeat<br/>(all lab servers)"]
             end
             subgraph HIVE01["hive01 · 192.168.50.15"]
                 TH["TheHive 5.8<br/>case management"]
@@ -45,6 +46,7 @@ flowchart TB
     WAN --- OPNL
     OPNL -- "firewall logs (syslog RFC5424)" --> LS --> ES --> KB
     ADMIN -. "NAT 2210 SSH · 5601 Kibana<br/>8443 TheHive · 3443 Shuffle · 9443 Cortex · 7443 MISP" .-> WAN
+    AB -. "host events (TLS)" .-> ES
     ES --> EA -- "webhook: detections" --> SH
     SH -- "create alert + observables (API)" --> TH
     TH -- "run analyzers (API)" --> CX
@@ -70,9 +72,9 @@ flowchart TB
 | Cortex 4.1: observable enrichment (Abuse_Finder, DShield, Robtex), connected to TheHive | [`cortex01/`](cortex01/README.md) | ✅ Running; analyzers run from TheHive observables |
 | MISP 2.5: threat-intel feeds (Tor exits, blocklist.de, Feodo C2, CIRCL OSINT), searched by Cortex | [`misp01/`](misp01/README.md) | ✅ Running; demo attacker matched to Tor exit feed automatically |
 | Automatic enrichment: every new alert runs all matching analyzers (Shuffle) | [`shuffle/`](shuffle/auto-enrich.py) | ✅ Live (VirusTotal, AbuseIPDB, DShield, Robtex, Abuse_Finder, MISP) |
-| Detections: ElastAlert2 → Shuffle → TheHive | [`elastalert/`](elastalert/README.md) | ✅ 4 rules live, each tested end to end: port scan, SSH brute force, LAN host sweep, block burst |
+| Detections: ElastAlert2 → Shuffle → TheHive | [`elastalert/`](elastalert/README.md) | ✅ 7 rules live: 4 network (port scan, SSH brute force, LAN host sweep, block burst) + 3 host (failed logins, recon tool, new user), all MITRE-mapped |
 | Detection rules as code: CI checks + deploy with rollback | [`cicd/`](cicd/README.md), [`elastalert/`](elastalert/README.md) | ✅ Live |
-| Lab-internal (east-west) detection | | ⏳ Needs host telemetry (traffic between LAN hosts never crosses the firewall) |
+| Host telemetry: Auditbeat on all 4 Linux servers (logins, user commands, account and file changes) | [`auditbeat/`](auditbeat/README.md) | ✅ Live; lab-to-lab SSH brute force detected (invisible to the firewall) |
 | MITRE ATT&CK technique on every alert (TTPs tab) | [`hive01/`](hive01/README.md) | ✅ Live |
 | OpenCTI | | ⏳ Planned (after submission) |
 
@@ -94,6 +96,7 @@ elk/            SIEM build: configs, Logstash pipeline, retention objects, gotch
   kibana/          kibana.yml additions
   logstash/        conf.d/ split pipeline, tests/ sample logs
 elastalert/     Detection rules (ElastAlert2): config, rules, service, build notes
+auditbeat/      Host telemetry: Auditbeat config (CI-tested) for all Linux servers
 misp01/         Threat intelligence: MISP stack, feeds, Cortex integration, gotchas
 shuffle/        SOAR logic kept in Git (auto-enrichment step)
 demo/           Attack simulator: synthetic firewall logs through the whole pipeline
