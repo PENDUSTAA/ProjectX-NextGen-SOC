@@ -120,3 +120,16 @@ cicd/           Pipeline reference: workflow, test + deploy scripts, integration
 | MISP queried through Cortex, not a direct TheHive import | Every alert gets an IOC match result without flooding TheHive with thousands of feed events as alerts |
 | Cortex on its own VM | StrangeBee recommends 16 GB for Cortex + its Elasticsearch; analyzers run as extra containers, so it doesn't share hive01's memory |
 | Self-hosted runner, root-owned deploy script | Deploys from inside the lab with no inbound access; the repo cannot change what runs as root |
+
+## Roadmap (Phase 2, Nov 2026 – Jan 2027)
+
+| ID | Item | Value |
+|---|---|---|
+| B-01 | Hardening: internal CA with TLS verification on, per-host credentials, restricted firewall management | Production-grade security |
+| B-02 | Backups: Elasticsearch snapshots, TheHive/Cortex/MISP data, firewall configuration | Recovery from VM or disk failure |
+| B-03 | Commercial data sources: FortiGate, Palo Alto, CrowdStrike Falcon, Cortex XDR | Visibility across the MSS client estate |
+| B-04 | Response playbooks: auto-block, host isolation, auto-close of false positives | Automated response (MTTR) |
+| B-05 | Windows endpoint telemetry (Sysmon) with detection rules | Windows visibility |
+| B-06 | OpenCTI; export of confirmed TheHive cases to MISP | Full threat-intelligence lifecycle |
+| B-07 | n8n, Grafana, OpenVAS, NetBox, OpenCanary | Reporting, vulnerability management, asset context, deception |
+| B-08 | Pilot client onboarding and UAT | First live MSS service |
