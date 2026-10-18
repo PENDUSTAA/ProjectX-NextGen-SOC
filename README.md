@@ -1,4 +1,4 @@
-# SOC-REVAMP-Architecture
+# ProjectX-NextGen-SOC
 
 Architecture, build notes and configuration for **PROJECT X**, a SOC lab platform on VMware ESXi. It covers an OPNsense gateway, an Elastic SIEM, and a CI/CD pipeline that tests and deploys configuration changes automatically.
 
