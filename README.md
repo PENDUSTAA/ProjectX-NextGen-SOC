@@ -123,18 +123,16 @@ cicd/           Pipeline reference: workflow, test + deploy scripts, integration
 
 ## Commissioning demo (video)
 
-▶ **[Watch the end-to-end demo](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/tag/v1.0)** (recorded 19 Oct 2026, attached to release v1.0)
+Recorded 19 Oct 2026 on the live lab. All videos are attached to the **[latest release](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest)**. Each scene has a command-line view (proof from the servers) and, where relevant, the web UI view.
 
-| Scene | What it proves |
-|---|---|
-| 1 | Platform running: services active, cluster green, 90-day retention policy |
-| 2 | Firewall logs and host telemetry from all 4 servers arriving in Elasticsearch |
-| 3 | Simulated port scan from a Tor exit node detected by ElastAlert2 |
-| 4 | Alert created in TheHive automatically, with MITRE ATT&CK T1046 |
-| 5 | Automatic enrichment: VirusTotal, AbuseIPDB, DShield, MISP Tor-exit match |
-| 6 | SSH brute force between two lab servers: detected from host logs, invisible to the firewall |
-| 7 | Attacker tool (nmap) and new local account detected (T1046, T1136) |
-| 8 | Change control: merged pull requests and green CI/CD pipeline |
+| # | Scene | What it proves | Video |
+|---|---|---|---|
+| 1 | Logs are coming in | Services running, cluster healthy, 90-day retention; firewall logs and host telemetry from all 4 servers arriving | [CLI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/Logs.are.coming.in.E1.E2.mp4) · [UI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/Logs.are.coming.in.UI.mp4) |
+| 2 | A port scan is detected | Simulated scan from a Tor exit node detected by ElastAlert2 within about a minute | [CLI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/A.port.scan.is.detected.mp4) · [UI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/A.port.scan.is.detected.UI.mp4) |
+| 3 | The alert appears in TheHive | Alert created automatically, with the attacker IP and MITRE ATT&CK T1046 | [UI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/The.alert.appears.in.TheHive.mp4) |
+| 4 | Automatic enrichment | VirusTotal, AbuseIPDB, DShield and MISP (Tor-exit match) run with no analyst action | [UI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/Automatic.enrichment.mp4) |
+| 5 | An attack inside the LAN | SSH brute force between two lab servers: detected from host logs, zero firewall records | [CLI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/An.attack.inside.the.LAN.mp4) · [UI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/An.attack.inside.the.LAN.UI.mp4) |
+| 6 | Attacker tool and new account | nmap run and a new local account detected from host telemetry (T1046, T1136) | [CLI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/Attacker.tool.and.new.account.mp4) · [UI](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/latest/download/Attacker.tool.and.new.account.UI.mp4) |
 
 ## Roadmap (Phase 2, Nov 2026 – Jan 2027)
 
