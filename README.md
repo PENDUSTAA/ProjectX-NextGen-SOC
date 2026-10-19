@@ -121,6 +121,21 @@ cicd/           Pipeline reference: workflow, test + deploy scripts, integration
 | Cortex on its own VM | StrangeBee recommends 16 GB for Cortex + its Elasticsearch; analyzers run as extra containers, so it doesn't share hive01's memory |
 | Self-hosted runner, root-owned deploy script | Deploys from inside the lab with no inbound access; the repo cannot change what runs as root |
 
+## Commissioning demo (video)
+
+▶ **[Watch the end-to-end demo](https://github.com/PENDUSTAA/ProjectX-NextGen-SOC-/releases/tag/v1.0)** (recorded 19 Oct 2026, attached to release v1.0)
+
+| Scene | What it proves |
+|---|---|
+| 1 | Platform running: services active, cluster green, 90-day retention policy |
+| 2 | Firewall logs and host telemetry from all 4 servers arriving in Elasticsearch |
+| 3 | Simulated port scan from a Tor exit node detected by ElastAlert2 |
+| 4 | Alert created in TheHive automatically, with MITRE ATT&CK T1046 |
+| 5 | Automatic enrichment: VirusTotal, AbuseIPDB, DShield, MISP Tor-exit match |
+| 6 | SSH brute force between two lab servers: detected from host logs, invisible to the firewall |
+| 7 | Attacker tool (nmap) and new local account detected (T1046, T1136) |
+| 8 | Change control: merged pull requests and green CI/CD pipeline |
+
 ## Roadmap (Phase 2, Nov 2026 – Jan 2027)
 
 | ID | Item | Value |
